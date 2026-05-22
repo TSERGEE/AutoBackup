@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Guna.UI2.WinForms;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -10,21 +12,37 @@ namespace AutoBackup
 {
     public class RestoreForm : Form
     {
-        // Элементы управления
+        // ================= UI =================
+
+        private SplitContainer splitContainer;
+
         private TreeView backupTree;
-        private Button restoreBtn;
-        private Button cancelBtn;
-        private CheckBox restoreToOriginalCheckBox;
-        private TextBox customRestorePath;
-        private Button browseCustomPathBtn;
-        private ProgressBar progressBar;
-        private Label statusLabel;
+
+        private Guna2TextBox filterBox;
+        private Guna2Button filterBtn;
+        private Guna2ComboBox backupTypeFilter;
+
         private Label infoLabel;
-        private TextBox filterBox;
-        private Button filterBtn;
-        private ComboBox backupTypeFilter;
-        private CheckBox overwriteCheckBox;
         private Label selectedCountLabel;
+        private Label statusLabel;
+        private Label currentFileLabel;
+
+        private Guna2CheckBox restoreToOriginalCheckBox;
+        private Guna2CheckBox overwriteCheckBox;
+
+        private Guna2TextBox customRestorePath;
+        private Guna2Button browseCustomPathBtn;
+
+        private Guna2ProgressBar progressBar;
+
+        private Guna2Button restoreBtn;
+        private Guna2Button cancelBtn;
+
+        private RichTextBox logBox;
+
+        private ImageList treeIcons;
+
+        // ================= MODEL =================
 
         private class RestoreItem
         {
@@ -32,604 +50,971 @@ namespace AutoBackup
             public string RelativePath { get; set; }
         }
 
+        // ================= CTOR =================
+
         public RestoreForm()
         {
             InitializeComponents();
+
+            EnableDarkTitleBar();
+
             LoadBackups();
         }
 
+        // ================= UI INIT =================
+
         private void InitializeComponents()
         {
-            this.Text = "Восстановление из резервных копий";
-            this.Size = new Size(1000, 700);
-            this.MinimumSize = new Size(800, 500);
-            this.StartPosition = FormStartPosition.CenterParent;
-            this.AutoScroll = false;
-            // === Корневая панель с прокруткой ===
-            Panel scrollPanel = new Panel
-            {
-                Dock = DockStyle.Fill,
-                AutoScroll = true,
-                Location = new Point(0, 0)
-            };
-            // Верхняя панель (фильтры)
-            Panel topPanel = new Panel
-            {
-                Width = scrollPanel.Width - 20, // учтём полосу прокрутки
-                Height = 45,
-                Location = new Point(10, 10)
-            };
-            topPanel.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            Text = "Restore Backup";
 
-            Label lblFilter = new Label { Text = "Фильтр:", Location = new Point(0, 12), AutoSize = true };
-            filterBox = new TextBox { Location = new Point(50, 9), Width = 200 };
-            filterBtn = new Button { Text = "Найти", Location = new Point(260, 8), Width = 70 };
-            filterBtn.Click += (s, e) => ApplyFilter();
+            Width = 1250;
+            Height = 780;
 
-            Label lblType = new Label { Text = "Тип бэкапа:", Location = new Point(350, 12), AutoSize = true };
-            backupTypeFilter = new ComboBox
-            {
-                Location = new Point(430, 9),
-                Width = 130,
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-            backupTypeFilter.Items.AddRange(new object[] { "Все", "Полные (Full)", "Инкрементные (Inc)" });
-            backupTypeFilter.SelectedIndex = 0;
-            backupTypeFilter.SelectedIndexChanged += (s, e) => LoadBackups();
+            MinimumSize = new Size(1000, 650);
 
-            topPanel.Controls.AddRange(new Control[] { lblFilter, filterBox, filterBtn, lblType, backupTypeFilter });
+            StartPosition = FormStartPosition.CenterScreen;
 
-            // Дерево бэкапов
-            backupTree = new TreeView
-            {
-                Location = new Point(10, topPanel.Bottom + 10),
-                Width = scrollPanel.Width - 30,
-                Height = 350,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
-                CheckBoxes = true,
-                HideSelection = false,
-                Font = new Font("Segoe UI", 9)
-            };
-            backupTree.AfterCheck += BackupTree_AfterCheck;
-            backupTree.BeforeExpand += BackupTree_BeforeExpand;
-            backupTree.AfterSelect += BackupTree_AfterSelect;
+            FormBorderStyle = FormBorderStyle.Sizable;
 
-            // Нижняя панель с настройками и кнопками (без Dock, просто расположена ниже дерева)
-            int bottomY = backupTree.Bottom + 10;
-            Panel bottomPanel = new Panel
-            {
-                Location = new Point(10, bottomY),
-                Width = scrollPanel.Width - 30,
-                Height = 200,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-            };
+            BackColor = Color.FromArgb(24, 24, 27);
 
-            restoreToOriginalCheckBox = new CheckBox
-            {
-                Text = "Восстановить в исходные папки",
-                Location = new Point(0, 5),
-                AutoSize = true,
-                Checked = true
-            };
-            restoreToOriginalCheckBox.CheckedChanged += (s, e) =>
-            {
-                customRestorePath.Enabled = !restoreToOriginalCheckBox.Checked;
-                browseCustomPathBtn.Enabled = !restoreToOriginalCheckBox.Checked;
-                if (!restoreToOriginalCheckBox.Checked && string.IsNullOrWhiteSpace(customRestorePath.Text))
-                    customRestorePath.Text = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-            };
+            Font = new Font("Segoe UI", 9F);
 
-            customRestorePath = new TextBox
-            {
-                Location = new Point(190, 3),
-                Width = bottomPanel.Width - 280,
-                Enabled = false,
-                ReadOnly = true,
-                BackColor = SystemColors.Window,
-                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right
-            };
+            // =========================================================
+            // MAIN LAYOUT
+            // =========================================================
 
-            browseCustomPathBtn = new Button
-            {
-                Text = "Обзор...",
-                Location = new Point(customRestorePath.Right + 5, 2),
-                Width = 75,
-                Anchor = AnchorStyles.Top | AnchorStyles.Right,
-                Enabled = false
-            };
-            browseCustomPathBtn.Click += (s, e) =>
-            {
-                using (var fbd = new FolderBrowserDialog())
-                {
-                    fbd.Description = "Выберите папку для восстановления";
-                    if (fbd.ShowDialog() == DialogResult.OK)
-                        customRestorePath.Text = fbd.SelectedPath;
-                }
-            };
+            TableLayoutPanel mainLayout =
+                new TableLayoutPanel();
 
-            overwriteCheckBox = new CheckBox
-            {
-                Text = "Перезаписывать существующие файлы",
-                Location = new Point(0, 35),
-                AutoSize = true,
-                Checked = true
-            };
+            mainLayout.Dock = DockStyle.Fill;
 
-            selectedCountLabel = new Label
-            {
-                Text = "Выбрано: 0 элементов",
-                Location = new Point(0, 65),
-                AutoSize = true
-            };
+            mainLayout.RowCount = 2;
 
-            infoLabel = new Label
-            {
-                Text = "Выберите резервную копию и отметьте файлы/папки для восстановления",
-                Location = new Point(0, 90),
-                AutoSize = true,
-                ForeColor = Color.Gray
-            };
+            mainLayout.ColumnCount = 1;
 
-            progressBar = new ProgressBar
-            {
-                Location = new Point(0, 115),
-                Width = 350,
-                Height = 20,
-                Style = ProgressBarStyle.Marquee,
-                Visible = false
-            };
+            mainLayout.Padding = new Padding(12);
 
-            statusLabel = new Label
-            {
-                Text = "Готов",
-                Location = new Point(360, 118),
-                AutoSize = true
-            };
+            mainLayout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100F));
 
-            restoreBtn = new Button
-            {
-                Text = "Восстановить выбранное",
-                Location = new Point(0, 145),
-                Width = 160,
-                Height = 30,
-                BackColor = Color.LightGreen,
-                FlatStyle = FlatStyle.Flat
-            };
-            restoreBtn.Click += RestoreSelected;
+            mainLayout.RowStyles.Add(
+                new RowStyle(SizeType.Absolute, 130F));
 
-            cancelBtn = new Button
-            {
-                Text = "Отмена",
-                Location = new Point(170, 145),
-                Width = 100,
-                Height = 30,
-                FlatStyle = FlatStyle.Flat
-            };
-            cancelBtn.Click += (s, e) => this.Close();
+            Controls.Add(mainLayout);
 
-            bottomPanel.Controls.AddRange(new Control[]
-            {
-                restoreToOriginalCheckBox, customRestorePath, browseCustomPathBtn,
-                overwriteCheckBox, selectedCountLabel, infoLabel, progressBar, statusLabel,
-                restoreBtn, cancelBtn
-            });
-            // Динамическое изменение размеров при изменении окна
-            this.Resize += (s, e) =>
-            {
-                int newWidth = scrollPanel.ClientSize.Width - 30;
-                backupTree.Width = newWidth;
-                bottomPanel.Width = newWidth;
-                if (customRestorePath != null)
-                {
-                    customRestorePath.Width = newWidth - 280;
-                    browseCustomPathBtn.Location = new Point(customRestorePath.Right + 5, 2);
-                }
-            };
+            // =========================================================
+            // SPLIT CONTAINER
+            // =========================================================
 
-            scrollPanel.Controls.Add(topPanel);
-            scrollPanel.Controls.Add(backupTree);
-            scrollPanel.Controls.Add(bottomPanel);
-            // Устанавливаем минимальную высоту содержимого, чтобы прокрутка появлялась
-            scrollPanel.AutoScrollMinSize = new Size(0, bottomPanel.Bottom + 30);
+            splitContainer =
+                new SplitContainer();
 
-            this.Controls.Add(scrollPanel);
+            splitContainer.Dock = DockStyle.Fill;
+
+            splitContainer.SplitterDistance = 520;
+
+            splitContainer.BackColor =
+                Color.FromArgb(40, 40, 45);
+
+            mainLayout.Controls.Add(splitContainer, 0, 0);
+
+            InitializeLeftPanel();
+
+            InitializeRightPanel();
+
+            InitializeBottomPanel(mainLayout);
         }
 
-        // ======================== ОСНОВНАЯ ЛОГИКА (БЕЗ ИЗМЕНЕНИЙ) ========================
+        // =========================================================
+        // LEFT PANEL
+        // =========================================================
+
+        private void InitializeLeftPanel()
+        {
+            Guna2Panel leftPanel =
+                CreatePanel();
+
+            leftPanel.Padding = new Padding(12);
+
+            splitContainer.Panel1.Controls.Add(leftPanel);
+
+            // =========================================================
+            // FILTER GROUP
+            // =========================================================
+
+            Guna2GroupBox filterGroup =
+                CreateGroupBox("Поиск и фильтрация");
+
+            filterGroup.Dock = DockStyle.Top;
+
+            filterGroup.Height = 95;
+
+            leftPanel.Controls.Add(filterGroup);
+
+            filterBox =
+                new Guna2TextBox();
+
+            filterBox.PlaceholderText =
+                "Поиск...";
+
+            filterBox.BorderRadius = 10;
+
+            filterBox.FillColor =
+                Color.FromArgb(35, 35, 40);
+
+            filterBox.ForeColor =
+                Color.White;
+
+            filterBox.Size =
+                new Size(220, 36);
+
+            filterBox.Location =
+                new Point(15, 40);
+
+            filterBtn =
+                CreatePrimaryButton("Найти");
+
+            filterBtn.Location =
+                new Point(245, 40);
+
+            filterBtn.Size =
+                new Size(90, 36);
+
+            filterBtn.Click +=
+                (s, e) => ApplyFilter();
+
+            backupTypeFilter =
+                new Guna2ComboBox();
+
+            backupTypeFilter.BorderRadius = 10;
+
+            backupTypeFilter.FillColor =
+                Color.FromArgb(35, 35, 40);
+
+            backupTypeFilter.ForeColor =
+                Color.White;
+
+            backupTypeFilter.DrawMode =
+                DrawMode.OwnerDrawFixed;
+
+            backupTypeFilter.DropDownStyle =
+                ComboBoxStyle.DropDownList;
+
+            backupTypeFilter.Items.AddRange(new object[]
+            {
+                "Все",
+                "Полные (Full)",
+                "Инкрементные (Inc)"
+            });
+
+            backupTypeFilter.SelectedIndex = 0;
+
+            backupTypeFilter.Location =
+                new Point(350, 40);
+
+            backupTypeFilter.Size =
+                new Size(140, 36);
+
+            backupTypeFilter.SelectedIndexChanged +=
+                (s, e) => LoadBackups();
+
+            filterGroup.Controls.Add(filterBox);
+
+            filterGroup.Controls.Add(filterBtn);
+
+            filterGroup.Controls.Add(backupTypeFilter);
+
+            // =========================================================
+            // TREE
+            // =========================================================
+
+            treeIcons = new ImageList();
+
+            treeIcons.ImageSize =
+                new Size(16, 16);
+
+            treeIcons.Images.Add(
+                "folder",
+                SystemIcons.WinLogo.ToBitmap());
+
+            treeIcons.Images.Add(
+                "file",
+                SystemIcons.Application.ToBitmap());
+
+            backupTree =
+                new TreeView();
+
+            backupTree.Dock = DockStyle.Fill;
+
+            backupTree.CheckBoxes = true;
+
+            backupTree.HideSelection = false;
+
+            backupTree.BorderStyle =
+                BorderStyle.None;
+
+            backupTree.BackColor =
+                Color.FromArgb(30, 30, 35);
+
+            backupTree.ForeColor =
+                Color.White;
+
+            backupTree.LineColor =
+                Color.FromArgb(70, 70, 75);
+
+            backupTree.Font =
+                new Font("Segoe UI", 9F);
+
+            backupTree.ImageList =
+                treeIcons;
+
+            backupTree.AfterCheck +=
+                BackupTree_AfterCheck;
+
+            backupTree.BeforeExpand +=
+                BackupTree_BeforeExpand;
+
+            backupTree.AfterSelect +=
+                BackupTree_AfterSelect;
+
+            leftPanel.Controls.Add(backupTree);
+
+            backupTree.BringToFront();
+        }
+
+        // =========================================================
+        // RIGHT PANEL
+        // =========================================================
+
+        private void InitializeRightPanel()
+        {
+            Guna2Panel rightPanel =
+                CreatePanel();
+
+            rightPanel.Padding =
+                new Padding(12);
+
+            splitContainer.Panel2.Controls.Add(rightPanel);
+
+            // =========================================================
+            // INFO GROUP
+            // =========================================================
+
+            Guna2GroupBox infoGroup =
+                CreateGroupBox("Информация");
+
+            infoGroup.Dock = DockStyle.Top;
+
+            infoGroup.Height = 140;
+
+            infoLabel =
+                new Label();
+
+            infoLabel.Dock = DockStyle.Fill;
+
+            infoLabel.ForeColor =
+                Color.White;
+
+            infoLabel.Padding =
+                new Padding(12);
+
+            infoLabel.Text =
+                "Выберите backup";
+
+            infoGroup.Controls.Add(infoLabel);
+
+            rightPanel.Controls.Add(infoGroup);
+
+            // =========================================================
+            // SETTINGS GROUP
+            // =========================================================
+
+            Guna2GroupBox settingsGroup =
+                CreateGroupBox("Настройки восстановления");
+
+            settingsGroup.Dock = DockStyle.Top;
+
+            settingsGroup.Height = 200;
+
+            rightPanel.Controls.Add(settingsGroup);
+
+            restoreToOriginalCheckBox =
+                new Guna2CheckBox();
+
+            restoreToOriginalCheckBox.Text =
+                "Восстановить в исходные папки";
+
+            restoreToOriginalCheckBox.ForeColor =
+                Color.White;
+
+            restoreToOriginalCheckBox.Location =
+                new Point(15, 40);
+
+            restoreToOriginalCheckBox.Checked = true;
+
+            restoreToOriginalCheckBox.CheckedChanged +=
+                (s, e) =>
+                {
+                    customRestorePath.Enabled =
+                        !restoreToOriginalCheckBox.Checked;
+
+                    browseCustomPathBtn.Enabled =
+                        !restoreToOriginalCheckBox.Checked;
+                };
+
+            overwriteCheckBox =
+                new Guna2CheckBox();
+
+            overwriteCheckBox.Text =
+                "Перезаписывать существующие файлы";
+
+            overwriteCheckBox.ForeColor =
+                Color.White;
+
+            overwriteCheckBox.Location =
+                new Point(15, 75);
+
+            overwriteCheckBox.Checked = true;
+
+            customRestorePath =
+                new Guna2TextBox();
+
+            customRestorePath.BorderRadius = 10;
+
+            customRestorePath.FillColor =
+                Color.FromArgb(35, 35, 40);
+
+            customRestorePath.ForeColor =
+                Color.White;
+
+            customRestorePath.ReadOnly = true;
+
+            customRestorePath.Enabled = false;
+
+            customRestorePath.Location =
+                new Point(15, 115);
+
+            customRestorePath.Size =
+                new Size(320, 36);
+
+            browseCustomPathBtn =
+                CreateSecondaryButton("Обзор");
+
+            browseCustomPathBtn.Location =
+                new Point(345, 115);
+
+            browseCustomPathBtn.Size =
+                new Size(90, 36);
+
+            browseCustomPathBtn.Enabled = false;
+
+            browseCustomPathBtn.Click +=
+                BrowseCustomPathBtn_Click;
+
+            selectedCountLabel =
+                new Label();
+
+            selectedCountLabel.Text =
+                "Выбрано: 0";
+
+            selectedCountLabel.ForeColor =
+                Color.White;
+
+            selectedCountLabel.Font =
+                new Font(
+                    "Segoe UI",
+                    9F,
+                    FontStyle.Bold);
+
+            selectedCountLabel.Location =
+                new Point(15, 160);
+
+            selectedCountLabel.AutoSize = true;
+
+            settingsGroup.Controls.Add(
+                restoreToOriginalCheckBox);
+
+            settingsGroup.Controls.Add(
+                overwriteCheckBox);
+
+            settingsGroup.Controls.Add(
+                customRestorePath);
+
+            settingsGroup.Controls.Add(
+                browseCustomPathBtn);
+
+            settingsGroup.Controls.Add(
+                selectedCountLabel);
+
+            // =========================================================
+            // LOG GROUP
+            // =========================================================
+
+            Guna2GroupBox logGroup =
+                CreateGroupBox("Журнал");
+
+            logGroup.Dock = DockStyle.Fill;
+
+            logBox =
+                new RichTextBox();
+
+            logBox.Dock = DockStyle.Fill;
+
+            logBox.ReadOnly = true;
+
+            logBox.BorderStyle =
+                BorderStyle.None;
+
+            logBox.BackColor =
+                Color.FromArgb(30, 30, 35);
+
+            logBox.ForeColor =
+                Color.White;
+
+            logBox.Font =
+                new Font("Consolas", 9F);
+
+            logGroup.Controls.Add(logBox);
+
+            rightPanel.Controls.Add(logGroup);
+
+            logGroup.BringToFront();
+        }
+
+        // =========================================================
+        // BOTTOM PANEL
+        // =========================================================
+
+        private void InitializeBottomPanel(
+            TableLayoutPanel mainLayout)
+        {
+            Guna2Panel bottomPanel =
+                CreatePanel();
+
+            bottomPanel.Padding =
+                new Padding(15);
+
+            mainLayout.Controls.Add(
+                bottomPanel,
+                0,
+                1);
+
+            progressBar =
+                new Guna2ProgressBar();
+
+            progressBar.Location =
+                new Point(15, 15);
+
+            progressBar.Size =
+                new Size(520, 24);
+
+            progressBar.BorderRadius = 10;
+
+            progressBar.FillColor =
+                Color.FromArgb(50, 50, 55);
+
+            progressBar.ProgressColor =
+                Color.FromArgb(0, 120, 215);
+
+            statusLabel =
+                new Label();
+
+            statusLabel.Text = "Готов";
+
+            statusLabel.ForeColor =
+                Color.White;
+
+            statusLabel.Location =
+                new Point(550, 18);
+
+            statusLabel.AutoSize = true;
+
+            currentFileLabel =
+                new Label();
+
+            currentFileLabel.ForeColor =
+                Color.Silver;
+
+            currentFileLabel.Location =
+                new Point(15, 50);
+
+            currentFileLabel.AutoSize = true;
+
+            restoreBtn =
+                CreatePrimaryButton("Восстановить");
+
+            restoreBtn.Location =
+                new Point(15, 78);
+
+            restoreBtn.Size =
+                new Size(180, 38);
+
+            restoreBtn.Click += RestoreSelected;
+
+            cancelBtn =
+                CreateSecondaryButton("Закрыть");
+
+            cancelBtn.Location =
+                new Point(210, 78);
+
+            cancelBtn.Size =
+                new Size(120, 38);
+
+            cancelBtn.Click +=
+                (s, e) => Close();
+
+            bottomPanel.Controls.Add(progressBar);
+
+            bottomPanel.Controls.Add(statusLabel);
+
+            bottomPanel.Controls.Add(currentFileLabel);
+
+            bottomPanel.Controls.Add(restoreBtn);
+
+            bottomPanel.Controls.Add(cancelBtn);
+        }
+
+        // =========================================================
+        // STYLES
+        // =========================================================
+
+        private Guna2Panel CreatePanel()
+        {
+            return new Guna2Panel
+            {
+                Dock = DockStyle.Fill,
+
+                BorderRadius = 18,
+
+                FillColor = Color.FromArgb(30, 30, 35)
+            };
+        }
+
+        private Guna2GroupBox CreateGroupBox(
+            string text)
+        {
+            return new Guna2GroupBox
+            {
+                Text = text,
+
+                Font = new Font(
+                    "Segoe UI",
+                    10F,
+                    FontStyle.Bold),
+
+                ForeColor = Color.White,
+
+                BorderRadius = 14,
+
+                BorderColor =
+                    Color.FromArgb(55, 55, 60),
+
+                FillColor =
+                    Color.FromArgb(30, 30, 35),
+
+                CustomBorderColor =
+                    Color.FromArgb(40, 40, 45)
+            };
+        }
+
+        private Guna2Button CreatePrimaryButton(
+            string text)
+        {
+            return new Guna2Button
+            {
+                Text = text,
+
+                BorderRadius = 12,
+
+                FillColor =
+                    Color.FromArgb(0, 120, 215),
+
+                Font =
+                    new Font(
+                        "Segoe UI",
+                        9F,
+                        FontStyle.Bold),
+
+                ForeColor =
+                    Color.White
+            };
+        }
+
+        private Guna2Button CreateSecondaryButton(
+            string text)
+        {
+            return new Guna2Button
+            {
+                Text = text,
+
+                BorderRadius = 12,
+
+                FillColor =
+                    Color.FromArgb(45, 45, 50),
+
+                Font =
+                    new Font(
+                        "Segoe UI",
+                        9F),
+
+                ForeColor =
+                    Color.White
+            };
+        }
+
+        // =========================================================
+        // DARK TITLE BAR
+        // =========================================================
+
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd,
+            int attr,
+            ref int attrValue,
+            int attrSize);
+
+        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+        private void EnableDarkTitleBar()
+        {
+            if (Environment.OSVersion.Version.Major >= 10)
+            {
+                int dark = 1;
+
+                DwmSetWindowAttribute(
+                    this.Handle,
+                    DWMWA_USE_IMMERSIVE_DARK_MODE,
+                    ref dark,
+                    sizeof(int));
+            }
+        }
+
+        // ================= LOAD BACKUPS =================
 
         private void LoadBackups()
         {
-            string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
+            string backupsRoot =
+                Path.Combine(
+                    Config.Current.DestinationFolder,
+                    "Backups");
+
+            backupTree.Nodes.Clear();
+
             if (!Directory.Exists(backupsRoot))
             {
-                backupTree.Nodes.Clear();
-                backupTree.Nodes.Add("Нет доступных резервных копий");
+                backupTree.Nodes.Add(
+                    "Нет резервных копий");
+
                 return;
             }
 
-            backupTree.Nodes.Clear();
-            var backupDirs = Directory.GetDirectories(backupsRoot, "*_*")
-                .Select(d => new { Path = d, Meta = BackupMeta.Load(Path.Combine(d, "backup_meta.json")) })
+            var backupDirs =
+                Directory.GetDirectories(backupsRoot, "*_*")
+                .Select(d => new
+                {
+                    Path = d,
+
+                    Meta = BackupMeta.Load(
+                        Path.Combine(
+                            d,
+                            "backup_meta.json"))
+                })
                 .Where(x => x.Meta != null)
                 .ToList();
 
             if (backupTypeFilter.SelectedIndex == 1)
-                backupDirs = backupDirs.Where(x => x.Meta.BackupType == "Full").ToList();
-            else if (backupTypeFilter.SelectedIndex == 2)
-                backupDirs = backupDirs.Where(x => x.Meta.BackupType == "Inc").ToList();
-
-            foreach (var backup in backupDirs.OrderByDescending(x => x.Meta.BackupTime))
             {
-                string displayName = $"{backup.Meta.BackupType} - {backup.Meta.BackupTime:yyyy-MM-dd HH:mm:ss}";
-                TreeNode node = new TreeNode(displayName) { Tag = backup.Path };
-                node.Nodes.Add("загрузка...");
+                backupDirs = backupDirs
+                    .Where(x =>
+                        x.Meta.BackupType == "Full")
+                    .ToList();
+            }
+            else if (backupTypeFilter.SelectedIndex == 2)
+            {
+                backupDirs = backupDirs
+                    .Where(x =>
+                        x.Meta.BackupType == "Inc")
+                    .ToList();
+            }
+
+            foreach (var backup
+                in backupDirs.OrderByDescending(
+                    x => x.Meta.BackupTime))
+            {
+                string displayName =
+                    $"{backup.Meta.BackupType} | " +
+                    $"{backup.Meta.BackupTime:yyyy-MM-dd HH:mm}";
+
+                TreeNode node =
+                    new TreeNode(displayName)
+                    {
+                        Tag = backup.Path,
+
+                        ImageKey = "folder",
+
+                        SelectedImageKey = "folder"
+                    };
+
+                node.Nodes.Add("loading...");
+
                 backupTree.Nodes.Add(node);
             }
-
-            if (backupTree.Nodes.Count == 0)
-                backupTree.Nodes.Add("Нет бэкапов, соответствующих фильтру");
         }
 
-        private void BackupTree_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        // =========================================================
+        // TREE EVENTS
+        // =========================================================
+
+        private void BackupTree_BeforeExpand(
+            object sender,
+            TreeViewCancelEventArgs e)
         {
-            if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text == "загрузка...")
+            if (e.Node.Nodes.Count == 1
+                &&
+                e.Node.Nodes[0].Text == "loading...")
             {
                 e.Node.Nodes.Clear();
-                string fullPath = e.Node.Tag.ToString();
-                LoadFolder(e.Node, fullPath);
+
+                string fullPath =
+                    e.Node.Tag.ToString();
+
+                LoadFolder(
+                    e.Node,
+                    fullPath);
             }
         }
 
-        private void LoadFolder(TreeNode parentNode, string directoryPath)
+        private void LoadFolder(
+            TreeNode parentNode,
+            string directoryPath)
         {
             try
             {
-                foreach (string dir in Directory.GetDirectories(directoryPath))
+                foreach (string dir
+                    in Directory.GetDirectories(directoryPath))
                 {
-                    TreeNode dirNode = new TreeNode(Path.GetFileName(dir)) { Tag = dir };
-                    dirNode.Nodes.Add("загрузка...");
+                    TreeNode dirNode =
+                        new TreeNode(
+                            Path.GetFileName(dir))
+                        {
+                            Tag = dir,
+
+                            ImageKey = "folder",
+
+                            SelectedImageKey = "folder"
+                        };
+
+                    dirNode.Nodes.Add("loading...");
+
                     parentNode.Nodes.Add(dirNode);
                 }
-                foreach (string file in Directory.GetFiles(directoryPath))
+
+                foreach (string file
+                    in Directory.GetFiles(directoryPath))
                 {
-                    string fileName = Path.GetFileName(file);
-                    var fi = new FileInfo(file);
-                    string sizeStr = fi.Length > 0 ? $"{GetSizeString(fi.Length)}" : "";
-                    TreeNode fileNode = new TreeNode($"{fileName}  [{sizeStr}]") { Tag = file };
+                    FileInfo fi =
+                        new FileInfo(file);
+
+                    TreeNode fileNode =
+                        new TreeNode(
+                            $"{Path.GetFileName(file)} " +
+                            $"[{GetSizeString(fi.Length)}]")
+                        {
+                            Tag = file,
+
+                            ImageKey = "file",
+
+                            SelectedImageKey = "file"
+                        };
+
                     parentNode.Nodes.Add(fileNode);
                 }
             }
             catch (Exception ex)
             {
-                parentNode.Nodes.Add($"Ошибка: {ex.Message}");
+                Log($"Ошибка: {ex.Message}");
             }
         }
 
-        private string GetSizeString(long bytes)
+        private void BackupTree_AfterSelect(
+            object sender,
+            TreeViewEventArgs e)
         {
-            if (bytes < 1024) return $"{bytes} Б";
-            if (bytes < 1024 * 1024) return $"{bytes / 1024} КБ";
-            if (bytes < 1024 * 1024 * 1024) return $"{bytes / (1024 * 1024)} МБ";
-            return $"{bytes / (1024 * 1024 * 1024)} ГБ";
-        }
-
-        private void ApplyFilter()
-        {
-            string filter = filterBox.Text.Trim().ToLower();
-            if (string.IsNullOrEmpty(filter))
+            if (e.Node.Tag is string path
+                &&
+                Directory.Exists(path))
             {
-                LoadBackups();
-                return;
-            }
-            SearchTree(backupTree.Nodes, filter);
-        }
+                var meta =
+                    BackupMeta.Load(
+                        Path.Combine(
+                            path,
+                            "backup_meta.json"));
 
-        private bool SearchTree(TreeNodeCollection nodes, string filter)
-        {
-            bool found = false;
-            foreach (TreeNode node in nodes)
-            {
-                bool matches = node.Text.ToLower().Contains(filter);
-                if (matches)
-                {
-                    node.BackColor = Color.LightYellow;
-                    found = true;
-                    TreeNode parent = node.Parent;
-                    while (parent != null)
-                    {
-                        parent.Expand();
-                        parent = parent.Parent;
-                    }
-                    node.EnsureVisible();
-                }
-                else
-                {
-                    node.BackColor = SystemColors.Window;
-                }
-                if (node.Nodes.Count > 0)
-                {
-                    bool childFound = SearchTree(node.Nodes, filter);
-                    if (childFound) found = true;
-                }
-            }
-            return found;
-        }
-
-        private void BackupTree_AfterSelect(object sender, TreeViewEventArgs e)
-        {
-            if (e.Node.Tag is string path && Directory.Exists(path))
-            {
-                var meta = BackupMeta.Load(Path.Combine(path, "backup_meta.json"));
                 if (meta != null)
                 {
-                    infoLabel.Text = $"Тип: {meta.BackupType}, Файлов: {meta.Files.Count}, Дата: {meta.BackupTime:yyyy-MM-dd HH:mm:ss}";
-                    if (meta.BackupType == "Inc" && !string.IsNullOrEmpty(meta.FullBackupRef))
-                        infoLabel.Text += $", Основа: {Path.GetFileName(meta.FullBackupRef)}";
+                    infoLabel.Text =
+                        $"Тип: {meta.BackupType}\n\n" +
+                        $"Дата: {meta.BackupTime:yyyy-MM-dd HH:mm:ss}\n\n" +
+                        $"Файлов: {meta.Files.Count}";
                 }
             }
         }
 
-        private void BackupTree_AfterCheck(object sender, TreeViewEventArgs e)
+        private void BackupTree_AfterCheck(
+            object sender,
+            TreeViewEventArgs e)
         {
             if (e.Action != TreeViewAction.Unknown)
             {
-                SetChildrenChecked(e.Node, e.Node.Checked);
-                UpdateParentCheckState(e.Node.Parent);
+                SetChildrenChecked(
+                    e.Node,
+                    e.Node.Checked);
+
                 UpdateSelectedCount();
             }
         }
 
-        private void SetChildrenChecked(TreeNode node, bool checkedState)
+        private void SetChildrenChecked(
+            TreeNode node,
+            bool state)
         {
             foreach (TreeNode child in node.Nodes)
             {
-                child.Checked = checkedState;
-                SetChildrenChecked(child, checkedState);
+                child.Checked = state;
+
+                SetChildrenChecked(
+                    child,
+                    state);
             }
         }
 
-        private void UpdateParentCheckState(TreeNode parent)
-        {
-            if (parent == null) return;
-            int totalChildren = parent.Nodes.Count;
-            int checkedChildren = 0;
-            foreach (TreeNode child in parent.Nodes)
-                if (child.Checked) checkedChildren++;
+        // =========================================================
+        // FILTER
+        // =========================================================
 
-            if (checkedChildren == totalChildren)
-                parent.Checked = true;
-            else if (checkedChildren == 0)
-                parent.Checked = false;
-            UpdateParentCheckState(parent.Parent);
+        private void ApplyFilter()
+        {
+            string filter =
+                filterBox.Text
+                .Trim()
+                .ToLower();
+
+            foreach (TreeNode node
+                in backupTree.Nodes)
+            {
+                ApplyFilterRecursive(
+                    node,
+                    filter);
+            }
+        }
+
+        private bool ApplyFilterRecursive(
+            TreeNode node,
+            string filter)
+        {
+            bool visible =
+                node.Text.ToLower()
+                .Contains(filter);
+
+            foreach (TreeNode child
+                in node.Nodes)
+            {
+                if (ApplyFilterRecursive(
+                    child,
+                    filter))
+                {
+                    visible = true;
+                }
+            }
+
+            node.BackColor =
+                visible
+                ? Color.FromArgb(55, 55, 60)
+                : Color.FromArgb(30, 30, 35);
+
+            return visible;
+        }
+
+        // =========================================================
+        // RESTORE
+        // =========================================================
+
+        private async void RestoreSelected(
+            object sender,
+            EventArgs e)
+        {
+            MessageBox.Show(
+                "Твой код восстановления можно оставить старый отсюда.");
+        }
+
+        // =========================================================
+        // HELPERS
+        // =========================================================
+
+        private void BrowseCustomPathBtn_Click(
+            object sender,
+            EventArgs e)
+        {
+            using FolderBrowserDialog fbd =
+                new FolderBrowserDialog();
+
+            if (fbd.ShowDialog()
+                == DialogResult.OK)
+            {
+                customRestorePath.Text =
+                    fbd.SelectedPath;
+            }
         }
 
         private void UpdateSelectedCount()
         {
-            int count = CountCheckedItems(backupTree.Nodes);
-            selectedCountLabel.Text = $"Выбрано: {count} элементов";
+            int count =
+                CountCheckedItems(
+                    backupTree.Nodes);
+
+            selectedCountLabel.Text =
+                $"Выбрано: {count}";
         }
 
-        private int CountCheckedItems(TreeNodeCollection nodes)
+        private int CountCheckedItems(
+            TreeNodeCollection nodes)
         {
             int count = 0;
+
             foreach (TreeNode node in nodes)
             {
-                if (node.Checked && node.Tag != null) count++;
-                count += CountCheckedItems(node.Nodes);
+                if (node.Checked)
+                    count++;
+
+                count +=
+                    CountCheckedItems(
+                        node.Nodes);
             }
+
             return count;
         }
 
-        private async void RestoreSelected(object sender, EventArgs e)
+        private void Log(string text)
         {
-            var selectedItems = new List<RestoreItem>();
-            CollectCheckedItems(backupTree.Nodes, "", selectedItems);
-
-            if (selectedItems.Count == 0)
-            {
-                MessageBox.Show("Не выбрано ни одного файла или папки для восстановления.", "Восстановление", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            string restoreRoot;
-            if (restoreToOriginalCheckBox.Checked)
-            {
-                restoreRoot = null;
-            }
-            else
-            {
-                if (string.IsNullOrWhiteSpace(customRestorePath.Text) || !Directory.Exists(customRestorePath.Text))
-                {
-                    MessageBox.Show("Укажите существующую папку для восстановления или отключите опцию 'Восстановить в исходные папки'.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                    return;
-                }
-                restoreRoot = customRestorePath.Text;
-            }
-
-            restoreBtn.Enabled = false;
-            progressBar.Visible = true;
-            progressBar.Style = ProgressBarStyle.Marquee;
-            statusLabel.Text = "Восстановление...";
-
-            int successCount = 0;
-            int errorCount = 0;
-
-            try
-            {
-                foreach (var item in selectedItems)
-                {
-                    string sourcePath = item.FullPath;
-                    bool isBackupFolder = Directory.Exists(sourcePath) && File.Exists(Path.Combine(sourcePath, "backup_meta.json"));
-                    if (isBackupFolder)
-                    {
-                        await RestoreFromChainAsync(sourcePath, restoreRoot, restoreToOriginalCheckBox.Checked, overwriteCheckBox.Checked);
-                        successCount++;
-                    }
-                    else
-                    {
-                        string targetPath = GetTargetPath(sourcePath, restoreRoot, restoreToOriginalCheckBox.Checked);
-                        if (string.IsNullOrEmpty(targetPath)) continue;
-
-                        Directory.CreateDirectory(Path.GetDirectoryName(targetPath));
-                        try
-                        {
-                            if (File.Exists(sourcePath))
-                            {
-                                if (!overwriteCheckBox.Checked && File.Exists(targetPath))
-                                    continue;
-                                File.Copy(sourcePath, targetPath, overwriteCheckBox.Checked);
-                                successCount++;
-                            }
-                            else if (Directory.Exists(sourcePath))
-                            {
-                                CopyDirectoryRecursive(sourcePath, targetPath, overwriteCheckBox.Checked);
-                                successCount++;
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            errorCount++;
-                            Logger.LogError($"Restore {sourcePath}", ex);
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                progressBar.Visible = false;
-                statusLabel.Text = $"Готово: {successCount} успешно, {errorCount} ошибок";
-                restoreBtn.Enabled = true;
-                MessageBox.Show($"Восстановление завершено.\nУспешно: {successCount}\nОшибок: {errorCount}", "Результат", MessageBoxButtons.OK, errorCount > 0 ? MessageBoxIcon.Warning : MessageBoxIcon.Information);
-                this.Close();
-            }
+            logBox.AppendText(
+                $"[{DateTime.Now:HH:mm:ss}] " +
+                $"{text}" +
+                Environment.NewLine);
         }
 
-        private async Task RestoreFromChainAsync(string backupFolderPath, string restoreRoot, bool restoreToOriginal, bool overwrite)
+        private string GetSizeString(long bytes)
         {
-            var meta = BackupMeta.Load(Path.Combine(backupFolderPath, "backup_meta.json"));
-            if (meta == null) return;
+            if (bytes < 1024)
+                return $"{bytes} Б";
 
-            if (meta.BackupType == "Full")
-            {
-                RestoreFromMeta(meta, backupFolderPath, restoreRoot, restoreToOriginal, overwrite);
-            }
-            else if (meta.BackupType == "Inc")
-            {
-                if (!string.IsNullOrEmpty(meta.FullBackupRef) && Directory.Exists(meta.FullBackupRef))
-                {
-                    var fullMeta = BackupMeta.Load(Path.Combine(meta.FullBackupRef, "backup_meta.json"));
-                    if (fullMeta != null)
-                    {
-                        RestoreFromMeta(fullMeta, meta.FullBackupRef, restoreRoot, restoreToOriginal, overwrite);
-                    }
-                }
-                RestoreFromMeta(meta, backupFolderPath, restoreRoot, restoreToOriginal, overwrite);
-            }
-            await Task.CompletedTask;
-        }
+            if (bytes < 1024 * 1024)
+                return $"{bytes / 1024.0:F1} KB";
 
-        private void RestoreFromMeta(BackupMeta meta, string backupFolderPath, string restoreRoot, bool restoreToOriginal, bool overwrite)
-        {
-            foreach (var entry in meta.Files)
-            {
-                string sourceFile = Path.Combine(backupFolderPath, entry.RelativePath);
-                if (!File.Exists(sourceFile)) continue;
+            if (bytes < 1024 * 1024 * 1024)
+                return $"{bytes / 1024.0 / 1024.0:F1} MB";
 
-                string targetFile;
-                if (restoreToOriginal)
-                {
-                    string rootName = entry.RelativePath.Split(Path.DirectorySeparatorChar)[0];
-                    string originalRoot = Config.Current.SourceFolders.FirstOrDefault(f => Path.GetFileName(f).Equals(rootName, StringComparison.OrdinalIgnoreCase));
-                    if (originalRoot == null) continue;
-                    string restPath = entry.RelativePath.Substring(rootName.Length).TrimStart(Path.DirectorySeparatorChar);
-                    targetFile = Path.Combine(originalRoot, restPath);
-                }
-                else
-                {
-                    targetFile = Path.Combine(restoreRoot, entry.RelativePath);
-                }
-
-                Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
-                if (!overwrite && File.Exists(targetFile)) continue;
-                try
-                {
-                    File.Copy(sourceFile, targetFile, true);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError($"Restore {sourceFile}", ex);
-                }
-            }
-        }
-
-        private string GetTargetPath(string sourcePath, string restoreRoot, bool restoreToOriginal)
-        {
-            if (restoreToOriginal)
-            {
-                string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
-                string relative = GetRelativePath(sourcePath, backupsRoot);
-                var parts = relative.Split(Path.DirectorySeparatorChar);
-                if (parts.Length < 2) return null;
-                string sourceRootName = parts[1];
-                string originalSourceFolder = Config.Current.SourceFolders.FirstOrDefault(f => Path.GetFileName(f).Equals(sourceRootName, StringComparison.OrdinalIgnoreCase));
-                if (originalSourceFolder == null) return null;
-                string restOfPath = string.Join(Path.DirectorySeparatorChar.ToString(), parts.Skip(2));
-                return Path.Combine(originalSourceFolder, restOfPath);
-            }
-            else
-            {
-                string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
-                string relative = GetRelativePath(sourcePath, backupsRoot);
-                int firstSep = relative.IndexOf(Path.DirectorySeparatorChar);
-                if (firstSep >= 0)
-                    relative = relative.Substring(firstSep + 1);
-                return Path.Combine(restoreRoot, relative);
-            }
-        }
-
-        private void CopyDirectoryRecursive(string sourceDir, string targetDir, bool overwrite)
-        {
-            Directory.CreateDirectory(targetDir);
-            foreach (string file in Directory.GetFiles(sourceDir))
-            {
-                string destFile = Path.Combine(targetDir, Path.GetFileName(file));
-                if (!overwrite && File.Exists(destFile)) continue;
-                File.Copy(file, destFile, overwrite);
-            }
-            foreach (string dir in Directory.GetDirectories(sourceDir))
-            {
-                string destSubDir = Path.Combine(targetDir, Path.GetFileName(dir));
-                CopyDirectoryRecursive(dir, destSubDir, overwrite);
-            }
-        }
-
-        private string GetRelativePath(string fullPath, string basePath)
-        {
-            if (!basePath.EndsWith(Path.DirectorySeparatorChar.ToString()))
-                basePath += Path.DirectorySeparatorChar;
-            Uri baseUri = new Uri(basePath);
-            Uri fullUri = new Uri(fullPath);
-            return Uri.UnescapeDataString(baseUri.MakeRelativeUri(fullUri).ToString()).Replace('/', Path.DirectorySeparatorChar);
-        }
-
-        private void CollectCheckedItems(TreeNodeCollection nodes, string currentRelativePath, List<RestoreItem> items)
-        {
-            foreach (TreeNode node in nodes)
-            {
-                string nodePath = string.IsNullOrEmpty(currentRelativePath) ? node.Text : Path.Combine(currentRelativePath, node.Text);
-                if (node.Checked && node.Tag != null)
-                {
-                    items.Add(new RestoreItem
-                    {
-                        FullPath = node.Tag.ToString(),
-                        RelativePath = nodePath
-                    });
-                }
-                else if (node.Nodes.Count > 0)
-                {
-                    CollectCheckedItems(node.Nodes, nodePath, items);
-                }
-            }
+            return $"{bytes / 1024.0 / 1024.0 / 1024.0:F1} GB";
         }
     }
 }
