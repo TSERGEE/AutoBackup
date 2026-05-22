@@ -12,45 +12,54 @@ namespace AutoBackup
 {
     public class RestoreForm : Form
     {
-        // ================= UI =================
-
-        private SplitContainer splitContainer;
+        // =====================================================
+        // UI
+        // =====================================================
 
         private TreeView backupTree;
 
         private Guna2TextBox filterBox;
-        private Guna2Button filterBtn;
+
         private Guna2ComboBox backupTypeFilter;
 
-        private Label infoLabel;
-        private Label selectedCountLabel;
-        private Label statusLabel;
-        private Label currentFileLabel;
+        private Guna2HtmlLabel infoLabel;
+
+        private Guna2HtmlLabel selectedCountLabel;
+
+        private Guna2HtmlLabel statusLabel;
+
+        private Guna2HtmlLabel currentFileLabel;
 
         private Guna2CheckBox restoreToOriginalCheckBox;
+
         private Guna2CheckBox overwriteCheckBox;
 
         private Guna2TextBox customRestorePath;
+
         private Guna2Button browseCustomPathBtn;
 
         private Guna2ProgressBar progressBar;
 
         private Guna2Button restoreBtn;
-        private Guna2Button cancelBtn;
+
+        private Guna2Button closeBtn;
 
         private RichTextBox logBox;
 
-        private ImageList treeIcons;
-
-        // ================= MODEL =================
+        // =====================================================
+        // MODEL
+        // =====================================================
 
         private class RestoreItem
         {
             public string FullPath { get; set; }
+
             public string RelativePath { get; set; }
         }
 
-        // ================= CTOR =================
+        // =====================================================
+        // CTOR
+        // =====================================================
 
         public RestoreForm()
         {
@@ -61,96 +70,97 @@ namespace AutoBackup
             LoadBackups();
         }
 
-        // ================= UI INIT =================
+        // =====================================================
+        // INIT
+        // =====================================================
 
         private void InitializeComponents()
         {
             Text = "Restore Backup";
 
-            Width = 1250;
-            Height = 780;
+            Width = 1400;
 
-            MinimumSize = new Size(1000, 650);
+            Height = 850;
+
+            MinimumSize = new Size(1200, 700);
 
             StartPosition = FormStartPosition.CenterScreen;
-
-            FormBorderStyle = FormBorderStyle.Sizable;
 
             BackColor = Color.FromArgb(24, 24, 27);
 
             Font = new Font("Segoe UI", 9F);
 
-            // =========================================================
-            // MAIN LAYOUT
-            // =========================================================
+            FormBorderStyle = FormBorderStyle.Sizable;
 
-            TableLayoutPanel mainLayout =
+            // =================================================
+            // MAIN LAYOUT
+            // =================================================
+
+            TableLayoutPanel layout =
                 new TableLayoutPanel();
 
-            mainLayout.Dock = DockStyle.Fill;
+            layout.Dock = DockStyle.Fill;
 
-            mainLayout.RowCount = 2;
+            layout.RowCount = 2;
 
-            mainLayout.ColumnCount = 1;
+            layout.ColumnCount = 1;
 
-            mainLayout.Padding = new Padding(12);
+            layout.Padding = new Padding(12);
 
-            mainLayout.RowStyles.Add(
-                new RowStyle(SizeType.Percent, 100F));
+            layout.RowStyles.Add(
+                new RowStyle(SizeType.Percent, 100));
 
-            mainLayout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 130F));
+            layout.RowStyles.Add(
+                new RowStyle(SizeType.Absolute, 78));
 
-            Controls.Add(mainLayout);
+            Controls.Add(layout);
 
-            // =========================================================
-            // SPLIT CONTAINER
-            // =========================================================
+            // =================================================
+            // CONTENT LAYOUT
+            // =================================================
 
-            splitContainer =
-                new SplitContainer();
+            TableLayoutPanel contentLayout =
+                new TableLayoutPanel();
 
-            splitContainer.Dock = DockStyle.Fill;
+            contentLayout.Dock = DockStyle.Fill;
 
-            splitContainer.SplitterDistance = 520;
+            contentLayout.ColumnCount = 2;
 
-            splitContainer.BackColor =
-                Color.FromArgb(40, 40, 45);
+            contentLayout.RowCount = 1;
 
-            mainLayout.Controls.Add(splitContainer, 0, 0);
+            contentLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 72));
 
-            InitializeLeftPanel();
+            contentLayout.ColumnStyles.Add(
+                new ColumnStyle(SizeType.Percent, 28));
 
-            InitializeRightPanel();
+            layout.Controls.Add(contentLayout);
 
-            InitializeBottomPanel(mainLayout);
-        }
+            // =================================================
+            // LEFT CARD
+            // =================================================
 
-        // =========================================================
-        // LEFT PANEL
-        // =========================================================
+            Guna2Panel leftCard =
+                CreateCard();
 
-        private void InitializeLeftPanel()
-        {
-            Guna2Panel leftPanel =
-                CreatePanel();
+            leftCard.Padding =
+                new Padding(18);
 
-            leftPanel.Padding = new Padding(12);
+            contentLayout.Controls.Add(leftCard, 0, 0);
 
-            splitContainer.Panel1.Controls.Add(leftPanel);
+            // =================================================
+            // FILTER PANEL
+            // =================================================
 
-            // =========================================================
-            // FILTER GROUP
-            // =========================================================
+            Panel filterPanel =
+                new Panel();
 
-            Guna2GroupBox filterGroup =
-                CreateGroupBox("Поиск и фильтрация");
+            filterPanel.Dock =
+                DockStyle.Top;
 
-            filterGroup.Dock = DockStyle.Top;
+            filterPanel.Height = 65;
 
-            filterGroup.Height = 95;
-
-            leftPanel.Controls.Add(filterGroup);
+            leftCard.Controls.Add(filterPanel);
 
             filterBox =
                 new Guna2TextBox();
@@ -167,25 +177,33 @@ namespace AutoBackup
                 Color.White;
 
             filterBox.Size =
-                new Size(220, 36);
+                new Size(250, 36);
 
             filterBox.Location =
-                new Point(15, 40);
+                new Point(0, 5);
 
-            filterBtn =
+            Guna2Button searchBtn =
                 CreatePrimaryButton("Найти");
 
-            filterBtn.Location =
-                new Point(245, 40);
+            searchBtn.Location =
+                new Point(265, 5);
 
-            filterBtn.Size =
-                new Size(90, 36);
+            searchBtn.Size = new Size(100, 36);
 
-            filterBtn.Click +=
-                (s, e) => ApplyFilter();
+            searchBtn.Click += (s, e) => ApplyFilter();
 
             backupTypeFilter =
                 new Guna2ComboBox();
+
+            backupTypeFilter.Items.AddRange(
+                new object[]
+                {
+                    "Все",
+                    "Full",
+                    "Inc"
+                });
+
+            backupTypeFilter.SelectedIndex = 0;
 
             backupTypeFilter.BorderRadius = 10;
 
@@ -195,79 +213,95 @@ namespace AutoBackup
             backupTypeFilter.ForeColor =
                 Color.White;
 
-            backupTypeFilter.DrawMode =
-                DrawMode.OwnerDrawFixed;
-
-            backupTypeFilter.DropDownStyle =
-                ComboBoxStyle.DropDownList;
-
-            backupTypeFilter.Items.AddRange(new object[]
-            {
-                "Все",
-                "Полные (Full)",
-                "Инкрементные (Inc)"
-            });
-
-            backupTypeFilter.SelectedIndex = 0;
+            backupTypeFilter.Size =
+                new Size(170, 36);
 
             backupTypeFilter.Location =
-                new Point(350, 40);
-
-            backupTypeFilter.Size =
-                new Size(140, 36);
+                new Point(380, 5);
 
             backupTypeFilter.SelectedIndexChanged +=
                 (s, e) => LoadBackups();
 
-            filterGroup.Controls.Add(filterBox);
+            filterPanel.Controls.Add(filterBox);
 
-            filterGroup.Controls.Add(filterBtn);
+            filterPanel.Controls.Add(searchBtn);
 
-            filterGroup.Controls.Add(backupTypeFilter);
+            filterPanel.Controls.Add(backupTypeFilter);
 
-            // =========================================================
-            // TREE
-            // =========================================================
+            // =================================================
+            // TREE CONTAINER
+            // =================================================
 
-            treeIcons = new ImageList();
+            Panel treeContainer =
+                new Panel();
 
-            treeIcons.ImageSize =
-                new Size(16, 16);
+            treeContainer.Dock =
+                DockStyle.Fill;
 
-            treeIcons.Images.Add(
-                "folder",
-                SystemIcons.WinLogo.ToBitmap());
+            treeContainer.Padding =
+                new Padding(0, 10, 0, 0);
 
-            treeIcons.Images.Add(
-                "file",
-                SystemIcons.Application.ToBitmap());
+            leftCard.Controls.Add(treeContainer);
+
+            treeContainer.BringToFront();
+
+            // =================================================
+            // TREEVIEW
+            // =================================================
 
             backupTree =
                 new TreeView();
 
-            backupTree.Dock = DockStyle.Fill;
+            backupTree.Dock =
+                DockStyle.Fill;
+
+            backupTree.BackColor =
+                Color.FromArgb(24, 24, 27);
+
+            backupTree.ForeColor =
+                Color.White;
+
+            backupTree.BorderStyle =
+                BorderStyle.None;
+
+            backupTree.Font =
+                new Font("Segoe UI", 9F);
 
             backupTree.CheckBoxes = true;
 
             backupTree.HideSelection = false;
 
-            backupTree.BorderStyle =
-                BorderStyle.None;
-
-            backupTree.BackColor =
-                Color.FromArgb(30, 30, 35);
-
-            backupTree.ForeColor =
-                Color.White;
-
             backupTree.LineColor =
-                Color.FromArgb(70, 70, 75);
+                Color.FromArgb(60, 60, 65);
 
-            backupTree.Font =
-                new Font("Segoe UI", 9F);
+            backupTree.ItemHeight = 24;
 
-            backupTree.ImageList =
-                treeIcons;
+            backupTree.DrawMode =
+                TreeViewDrawMode.OwnerDrawText;
+
+            backupTree.DrawNode += (s, e) =>
+            {
+                Color bg =
+                    e.Node.IsSelected
+                    ? Color.FromArgb(0, 120, 215)
+                    : Color.FromArgb(24, 24, 27);
+
+                using SolidBrush back =
+                    new SolidBrush(bg);
+
+                using SolidBrush fore =
+                    new SolidBrush(Color.White);
+
+                e.Graphics.FillRectangle(
+                    back,
+                    e.Bounds);
+
+                e.Graphics.DrawString(
+                    e.Node.Text,
+                    backupTree.Font,
+                    fore,
+                    e.Bounds.Location);
+            };
 
             backupTree.AfterCheck +=
                 BackupTree_AfterCheck;
@@ -277,81 +311,119 @@ namespace AutoBackup
 
             backupTree.AfterSelect +=
                 BackupTree_AfterSelect;
+            EnableDarkScrollBar(backupTree);
 
-            leftPanel.Controls.Add(backupTree);
+            treeContainer.Controls.Add(backupTree);
 
-            backupTree.BringToFront();
-        }
+            // =================================================
+            // RIGHT PANEL
+            // =================================================
 
-        // =========================================================
-        // RIGHT PANEL
-        // =========================================================
+            Panel rightPanel =
+                new Panel();
 
-        private void InitializeRightPanel()
-        {
-            Guna2Panel rightPanel =
-                CreatePanel();
+            rightPanel.Dock =
+                DockStyle.Fill;
 
-            rightPanel.Padding =
-                new Padding(12);
+            rightPanel.BackColor =
+                Color.Transparent;
 
-            splitContainer.Panel2.Controls.Add(rightPanel);
+            contentLayout.Controls.Add(
+                rightPanel,
+                1,
+                0);
 
-            // =========================================================
-            // INFO GROUP
-            // =========================================================
+            // =================================================
+            // SETTINGS CARD
+            // =================================================
 
-            Guna2GroupBox infoGroup =
-                CreateGroupBox("Информация");
+            Guna2Panel settingsCard =
+                CreateCard();
 
-            infoGroup.Dock = DockStyle.Top;
+            settingsCard.Dock =
+                DockStyle.Top;
 
-            infoGroup.Height = 140;
+            settingsCard.Height = 230;
 
-            infoLabel =
-                new Label();
+            settingsCard.Padding =
+                new Padding(18);
 
-            infoLabel.Dock = DockStyle.Fill;
+            rightPanel.Controls.Add(settingsCard);
 
-            infoLabel.ForeColor =
-                Color.White;
+            Label settingsTitle =
+                CreateTitle("Настройки");
 
-            infoLabel.Padding =
-                new Padding(12);
-
-            infoLabel.Text =
-                "Выберите backup";
-
-            infoGroup.Controls.Add(infoLabel);
-
-            rightPanel.Controls.Add(infoGroup);
-
-            // =========================================================
-            // SETTINGS GROUP
-            // =========================================================
-
-            Guna2GroupBox settingsGroup =
-                CreateGroupBox("Настройки восстановления");
-
-            settingsGroup.Dock = DockStyle.Top;
-
-            settingsGroup.Height = 200;
-
-            rightPanel.Controls.Add(settingsGroup);
+            settingsCard.Controls.Add(settingsTitle);
 
             restoreToOriginalCheckBox =
                 new Guna2CheckBox();
 
             restoreToOriginalCheckBox.Text =
-                "Восстановить в исходные папки";
+                "Восстановить в оригинал";
+
+            restoreToOriginalCheckBox.Checked = true;
 
             restoreToOriginalCheckBox.ForeColor =
                 Color.White;
 
-            restoreToOriginalCheckBox.Location =
-                new Point(15, 40);
+            restoreToOriginalCheckBox.BackColor =
+                Color.Transparent;
 
-            restoreToOriginalCheckBox.Checked = true;
+            restoreToOriginalCheckBox.Location =
+                new Point(18, 50);
+
+            overwriteCheckBox =
+                new Guna2CheckBox();
+
+            overwriteCheckBox.Text =
+                "Перезаписывать файлы";
+
+            overwriteCheckBox.Checked = true;
+
+            overwriteCheckBox.ForeColor =
+                Color.White;
+
+            overwriteCheckBox.BackColor =
+                Color.Transparent;
+
+            overwriteCheckBox.Location =
+                new Point(18, 85);
+
+            customRestorePath =
+                new Guna2TextBox();
+
+            customRestorePath.PlaceholderText =
+                "Папка восстановления";
+
+            customRestorePath.BorderRadius = 10;
+
+            customRestorePath.FillColor =
+                Color.FromArgb(35, 35, 40);
+
+            customRestorePath.ForeColor =
+                Color.White;
+
+            customRestorePath.Location =
+                new Point(18, 125);
+
+            customRestorePath.Size =
+                new Size(220, 36);
+
+            customRestorePath.Enabled = false;
+
+            browseCustomPathBtn =
+                CreateSecondaryButton("Обзор");
+
+            browseCustomPathBtn.Location =
+                new Point(245, 125);
+
+            browseCustomPathBtn.Size =
+                new Size(75, 36);
+
+            browseCustomPathBtn.Enabled = false;
+
+            browseCustomPathBtn.Click +=
+                BrowseCustomPathBtn_Click;
 
             restoreToOriginalCheckBox.CheckedChanged +=
                 (s, e) =>
@@ -363,57 +435,8 @@ namespace AutoBackup
                         !restoreToOriginalCheckBox.Checked;
                 };
 
-            overwriteCheckBox =
-                new Guna2CheckBox();
-
-            overwriteCheckBox.Text =
-                "Перезаписывать существующие файлы";
-
-            overwriteCheckBox.ForeColor =
-                Color.White;
-
-            overwriteCheckBox.Location =
-                new Point(15, 75);
-
-            overwriteCheckBox.Checked = true;
-
-            customRestorePath =
-                new Guna2TextBox();
-
-            customRestorePath.BorderRadius = 10;
-
-            customRestorePath.FillColor =
-                Color.FromArgb(35, 35, 40);
-
-            customRestorePath.ForeColor =
-                Color.White;
-
-            customRestorePath.ReadOnly = true;
-
-            customRestorePath.Enabled = false;
-
-            customRestorePath.Location =
-                new Point(15, 115);
-
-            customRestorePath.Size =
-                new Size(320, 36);
-
-            browseCustomPathBtn =
-                CreateSecondaryButton("Обзор");
-
-            browseCustomPathBtn.Location =
-                new Point(345, 115);
-
-            browseCustomPathBtn.Size =
-                new Size(90, 36);
-
-            browseCustomPathBtn.Enabled = false;
-
-            browseCustomPathBtn.Click +=
-                BrowseCustomPathBtn_Click;
-
             selectedCountLabel =
-                new Label();
+                new Guna2HtmlLabel();
 
             selectedCountLabel.Text =
                 "Выбрано: 0";
@@ -421,95 +444,146 @@ namespace AutoBackup
             selectedCountLabel.ForeColor =
                 Color.White;
 
-            selectedCountLabel.Font =
-                new Font(
-                    "Segoe UI",
-                    9F,
-                    FontStyle.Bold);
+            selectedCountLabel.BackColor =
+                Color.Transparent;
 
             selectedCountLabel.Location =
-                new Point(15, 160);
+                new Point(18, 180);
 
-            selectedCountLabel.AutoSize = true;
-
-            settingsGroup.Controls.Add(
+            settingsCard.Controls.Add(
                 restoreToOriginalCheckBox);
 
-            settingsGroup.Controls.Add(
+            settingsCard.Controls.Add(
                 overwriteCheckBox);
 
-            settingsGroup.Controls.Add(
+            settingsCard.Controls.Add(
                 customRestorePath);
 
-            settingsGroup.Controls.Add(
+            settingsCard.Controls.Add(
                 browseCustomPathBtn);
 
-            settingsGroup.Controls.Add(
+            settingsCard.Controls.Add(
                 selectedCountLabel);
 
-            // =========================================================
-            // LOG GROUP
-            // =========================================================
+            // =================================================
+            // INFO CARD
+            // =================================================
 
-            Guna2GroupBox logGroup =
-                CreateGroupBox("Журнал");
+            Guna2Panel infoCard =
+                CreateCard();
 
-            logGroup.Dock = DockStyle.Fill;
+            infoCard.Dock =
+                DockStyle.Top;
+
+            infoCard.Height = 170;
+
+            infoCard.Padding =
+                new Padding(18);
+
+            infoCard.Margin =
+                new Padding(0, 12, 0, 12);
+
+            rightPanel.Controls.Add(infoCard);
+
+            infoCard.BringToFront();
+
+            Label infoTitle =
+                CreateTitle("Информация");
+
+            infoCard.Controls.Add(infoTitle);
+
+            infoLabel =
+                new Guna2HtmlLabel();
+
+            infoLabel.Text =
+                "Выберите backup";
+
+            infoLabel.ForeColor =
+                Color.White;
+
+            infoLabel.BackColor =
+                Color.Transparent;
+
+            infoLabel.Location =
+                new Point(18, 55);
+
+            infoLabel.Size =
+                new Size(280, 100);
+
+            infoCard.Controls.Add(infoLabel);
+
+            // =================================================
+            // LOG CARD
+            // =================================================
+
+            Guna2Panel logCard =
+                CreateCard();
+
+            logCard.Dock =
+                DockStyle.Fill;
+
+            logCard.Padding =
+                new Padding(18);
+
+            rightPanel.Controls.Add(logCard);
+
+            logCard.BringToFront();
+
+            Label logTitle =
+                CreateTitle("Журнал");
+
+            logCard.Controls.Add(logTitle);
 
             logBox =
                 new RichTextBox();
 
-            logBox.Dock = DockStyle.Fill;
+            logBox.Location =
+                new Point(18, 50);
 
-            logBox.ReadOnly = true;
+            logBox.Anchor =
+                AnchorStyles.Top |
+                AnchorStyles.Bottom |
+                AnchorStyles.Left |
+                AnchorStyles.Right;
 
-            logBox.BorderStyle =
-                BorderStyle.None;
+            logBox.Size =
+                new Size(300, 300);
 
             logBox.BackColor =
-                Color.FromArgb(30, 30, 35);
+                Color.FromArgb(22, 22, 28);
 
             logBox.ForeColor =
                 Color.White;
 
-            logBox.Font =
-                new Font("Consolas", 9F);
+            logBox.BorderStyle =
+                BorderStyle.None;
 
-            logGroup.Controls.Add(logBox);
+            logBox.ReadOnly = true;
 
-            rightPanel.Controls.Add(logGroup);
+            logCard.Controls.Add(logBox);
 
-            logGroup.BringToFront();
-        }
+            // =================================================
+            // BOTTOM PANEL
+            // =================================================
 
-        // =========================================================
-        // BOTTOM PANEL
-        // =========================================================
-
-        private void InitializeBottomPanel(
-            TableLayoutPanel mainLayout)
-        {
             Guna2Panel bottomPanel =
-                CreatePanel();
+                CreateCard();
 
             bottomPanel.Padding =
-                new Padding(15);
+                new Padding(18);
 
-            mainLayout.Controls.Add(
-                bottomPanel,
-                0,
-                1);
+            layout.Controls.Add(bottomPanel);
 
             progressBar =
                 new Guna2ProgressBar();
 
             progressBar.Location =
-                new Point(15, 15);
+                new Point(18, 20);
 
             progressBar.Size =
-                new Size(520, 24);
+                new Size(350, 18);
 
-            progressBar.BorderRadius = 10;
+            progressBar.BorderRadius = 8;
 
             progressBar.FillColor =
                 Color.FromArgb(50, 50, 55);
@@ -518,50 +592,56 @@ namespace AutoBackup
                 Color.FromArgb(0, 120, 215);
 
             statusLabel =
-                new Label();
+                new Guna2HtmlLabel();
 
-            statusLabel.Text = "Готов";
+            statusLabel.Text =
+                "Готов";
 
             statusLabel.ForeColor =
                 Color.White;
 
-            statusLabel.Location =
-                new Point(550, 18);
+            statusLabel.BackColor =
+                Color.Transparent;
 
-            statusLabel.AutoSize = true;
+            statusLabel.Location =
+                new Point(390, 18);
 
             currentFileLabel =
-                new Label();
+                new Guna2HtmlLabel();
 
             currentFileLabel.ForeColor =
                 Color.Silver;
 
-            currentFileLabel.Location =
-                new Point(15, 50);
+            currentFileLabel.BackColor =
+                Color.Transparent;
 
-            currentFileLabel.AutoSize = true;
+            currentFileLabel.Location =
+                new Point(18, 45);
 
             restoreBtn =
-                CreatePrimaryButton("Восстановить");
+                CreatePrimaryButton(
+                    "Восстановить");
 
             restoreBtn.Location =
-                new Point(15, 78);
+                new Point(900, 15);
 
             restoreBtn.Size =
-                new Size(180, 38);
+                new Size(170, 38);
 
-            restoreBtn.Click += RestoreSelected;
+            restoreBtn.Click +=
+                RestoreSelected;
 
-            cancelBtn =
-                CreateSecondaryButton("Закрыть");
+            closeBtn =
+                CreateSecondaryButton(
+                    "Закрыть");
 
-            cancelBtn.Location =
-                new Point(210, 78);
+            closeBtn.Location =
+                new Point(1080, 15);
 
-            cancelBtn.Size =
+            closeBtn.Size =
                 new Size(120, 38);
 
-            cancelBtn.Click +=
+            closeBtn.Click +=
                 (s, e) => Close();
 
             bottomPanel.Controls.Add(progressBar);
@@ -572,14 +652,14 @@ namespace AutoBackup
 
             bottomPanel.Controls.Add(restoreBtn);
 
-            bottomPanel.Controls.Add(cancelBtn);
+            bottomPanel.Controls.Add(closeBtn);
         }
 
-        // =========================================================
-        // STYLES
-        // =========================================================
+        // =====================================================
+        // CARD
+        // =====================================================
 
-        private Guna2Panel CreatePanel()
+        private Guna2Panel CreateCard()
         {
             return new Guna2Panel
             {
@@ -587,36 +667,38 @@ namespace AutoBackup
 
                 BorderRadius = 18,
 
-                FillColor = Color.FromArgb(30, 30, 35)
+                FillColor = Color.FromArgb(30, 30, 35),
+
+                //Margin = new Padding(0, 0, 12, 12)
             };
         }
 
-        private Guna2GroupBox CreateGroupBox(
-            string text)
+        // =====================================================
+        // TITLE
+        // =====================================================
+
+        private Label CreateTitle(string text)
         {
-            return new Guna2GroupBox
+            return new Label
             {
                 Text = text,
 
-                Font = new Font(
-                    "Segoe UI",
-                    10F,
-                    FontStyle.Bold),
-
                 ForeColor = Color.White,
 
-                BorderRadius = 14,
+                Font = new Font(
+                    "Segoe UI",
+                    11F,
+                    FontStyle.Bold),
 
-                BorderColor =
-                    Color.FromArgb(55, 55, 60),
+                AutoSize = true,
 
-                FillColor =
-                    Color.FromArgb(30, 30, 35),
-
-                CustomBorderColor =
-                    Color.FromArgb(40, 40, 45)
+                Location = new Point(18, 18)
             };
         }
+
+        // =====================================================
+        // BUTTONS
+        // =====================================================
 
         private Guna2Button CreatePrimaryButton(
             string text)
@@ -630,14 +712,14 @@ namespace AutoBackup
                 FillColor =
                     Color.FromArgb(0, 120, 215),
 
+                ForeColor =
+                    Color.White,
+
                 Font =
                     new Font(
                         "Segoe UI",
                         9F,
-                        FontStyle.Bold),
-
-                ForeColor =
-                    Color.White
+                        FontStyle.Bold)
             };
         }
 
@@ -653,44 +735,19 @@ namespace AutoBackup
                 FillColor =
                     Color.FromArgb(45, 45, 50),
 
+                ForeColor =
+                    Color.White,
+
                 Font =
                     new Font(
                         "Segoe UI",
-                        9F),
-
-                ForeColor =
-                    Color.White
+                        9F)
             };
         }
 
-        // =========================================================
-        // DARK TITLE BAR
-        // =========================================================
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd,
-            int attr,
-            ref int attrValue,
-            int attrSize);
-
-        private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-
-        private void EnableDarkTitleBar()
-        {
-            if (Environment.OSVersion.Version.Major >= 10)
-            {
-                int dark = 1;
-
-                DwmSetWindowAttribute(
-                    this.Handle,
-                    DWMWA_USE_IMMERSIVE_DARK_MODE,
-                    ref dark,
-                    sizeof(int));
-            }
-        }
-
-        // ================= LOAD BACKUPS =================
+        // =====================================================
+        // LOAD BACKUPS
+        // =====================================================
 
         private void LoadBackups()
         {
@@ -702,138 +759,68 @@ namespace AutoBackup
             backupTree.Nodes.Clear();
 
             if (!Directory.Exists(backupsRoot))
-            {
-                backupTree.Nodes.Add(
-                    "Нет резервных копий");
-
                 return;
-            }
 
             var backupDirs =
-                Directory.GetDirectories(backupsRoot, "*_*")
-                .Select(d => new
-                {
-                    Path = d,
+                Directory.GetDirectories(
+                    backupsRoot,
+                    "*_*");
 
-                    Meta = BackupMeta.Load(
-                        Path.Combine(
-                            d,
-                            "backup_meta.json"))
-                })
-                .Where(x => x.Meta != null)
-                .ToList();
-
-            if (backupTypeFilter.SelectedIndex == 1)
+            foreach (string dir in backupDirs)
             {
-                backupDirs = backupDirs
-                    .Where(x =>
-                        x.Meta.BackupType == "Full")
-                    .ToList();
-            }
-            else if (backupTypeFilter.SelectedIndex == 2)
-            {
-                backupDirs = backupDirs
-                    .Where(x =>
-                        x.Meta.BackupType == "Inc")
-                    .ToList();
-            }
-
-            foreach (var backup
-                in backupDirs.OrderByDescending(
-                    x => x.Meta.BackupTime))
-            {
-                string displayName =
-                    $"{backup.Meta.BackupType} | " +
-                    $"{backup.Meta.BackupTime:yyyy-MM-dd HH:mm}";
-
                 TreeNode node =
-                    new TreeNode(displayName)
-                    {
-                        Tag = backup.Path,
+                    new TreeNode(
+                        Path.GetFileName(dir));
 
-                        ImageKey = "folder",
+                node.Tag = dir;
 
-                        SelectedImageKey = "folder"
-                    };
-
-                node.Nodes.Add("loading...");
+                node.Nodes.Add("loading");
 
                 backupTree.Nodes.Add(node);
             }
         }
 
-        // =========================================================
-        // TREE EVENTS
-        // =========================================================
+        // =====================================================
+        // TREE
+        // =====================================================
 
         private void BackupTree_BeforeExpand(
             object sender,
             TreeViewCancelEventArgs e)
         {
-            if (e.Node.Nodes.Count == 1
-                &&
-                e.Node.Nodes[0].Text == "loading...")
+            if (e.Node.Nodes.Count == 1 &&
+                e.Node.Nodes[0].Text == "loading")
             {
                 e.Node.Nodes.Clear();
 
-                string fullPath =
+                string path =
                     e.Node.Tag.ToString();
 
-                LoadFolder(
-                    e.Node,
-                    fullPath);
-            }
-        }
-
-        private void LoadFolder(
-            TreeNode parentNode,
-            string directoryPath)
-        {
-            try
-            {
                 foreach (string dir
-                    in Directory.GetDirectories(directoryPath))
+                    in Directory.GetDirectories(path))
                 {
-                    TreeNode dirNode =
+                    TreeNode node =
                         new TreeNode(
-                            Path.GetFileName(dir))
-                        {
-                            Tag = dir,
+                            Path.GetFileName(dir));
 
-                            ImageKey = "folder",
+                    node.Tag = dir;
 
-                            SelectedImageKey = "folder"
-                        };
+                    node.Nodes.Add("loading");
 
-                    dirNode.Nodes.Add("loading...");
-
-                    parentNode.Nodes.Add(dirNode);
+                    e.Node.Nodes.Add(node);
                 }
 
                 foreach (string file
-                    in Directory.GetFiles(directoryPath))
+                    in Directory.GetFiles(path))
                 {
-                    FileInfo fi =
-                        new FileInfo(file);
-
-                    TreeNode fileNode =
+                    TreeNode node =
                         new TreeNode(
-                            $"{Path.GetFileName(file)} " +
-                            $"[{GetSizeString(fi.Length)}]")
-                        {
-                            Tag = file,
+                            Path.GetFileName(file));
 
-                            ImageKey = "file",
+                    node.Tag = file;
 
-                            SelectedImageKey = "file"
-                        };
-
-                    parentNode.Nodes.Add(fileNode);
+                    e.Node.Nodes.Add(node);
                 }
-            }
-            catch (Exception ex)
-            {
-                Log($"Ошибка: {ex.Message}");
             }
         }
 
@@ -841,45 +828,34 @@ namespace AutoBackup
             object sender,
             TreeViewEventArgs e)
         {
-            if (e.Node.Tag is string path
-                &&
-                Directory.Exists(path))
-            {
-                var meta =
-                    BackupMeta.Load(
-                        Path.Combine(
-                            path,
-                            "backup_meta.json"));
+            if (e.Node.Tag == null)
+                return;
 
-                if (meta != null)
-                {
-                    infoLabel.Text =
-                        $"Тип: {meta.BackupType}\n\n" +
-                        $"Дата: {meta.BackupTime:yyyy-MM-dd HH:mm:ss}\n\n" +
-                        $"Файлов: {meta.Files.Count}";
-                }
-            }
+            string path =
+                e.Node.Tag.ToString();
+
+            infoLabel.Text =
+                $"<div style='color:white'>" +
+                $"{path}</div>";
         }
 
         private void BackupTree_AfterCheck(
             object sender,
             TreeViewEventArgs e)
         {
-            if (e.Action != TreeViewAction.Unknown)
-            {
-                SetChildrenChecked(
-                    e.Node,
-                    e.Node.Checked);
+            SetChildrenChecked(
+                e.Node,
+                e.Node.Checked);
 
-                UpdateSelectedCount();
-            }
+            UpdateSelectedCount();
         }
 
         private void SetChildrenChecked(
             TreeNode node,
             bool state)
         {
-            foreach (TreeNode child in node.Nodes)
+            foreach (TreeNode child
+                in node.Nodes)
             {
                 child.Checked = state;
 
@@ -889,83 +865,171 @@ namespace AutoBackup
             }
         }
 
-        // =========================================================
+        // =====================================================
         // FILTER
-        // =========================================================
+        // =====================================================
 
         private void ApplyFilter()
         {
             string filter =
                 filterBox.Text
-                .Trim()
-                .ToLower();
+                    .Trim()
+                    .ToLower();
 
             foreach (TreeNode node
                 in backupTree.Nodes)
             {
-                ApplyFilterRecursive(
-                    node,
-                    filter);
+                node.BackColor =
+                    node.Text.ToLower().Contains(filter)
+                    ? Color.FromArgb(60, 60, 65)
+                    : Color.Transparent;
             }
         }
 
-        private bool ApplyFilterRecursive(
-            TreeNode node,
-            string filter)
-        {
-            bool visible =
-                node.Text.ToLower()
-                .Contains(filter);
-
-            foreach (TreeNode child
-                in node.Nodes)
-            {
-                if (ApplyFilterRecursive(
-                    child,
-                    filter))
-                {
-                    visible = true;
-                }
-            }
-
-            node.BackColor =
-                visible
-                ? Color.FromArgb(55, 55, 60)
-                : Color.FromArgb(30, 30, 35);
-
-            return visible;
-        }
-
-        // =========================================================
+        // =====================================================
         // RESTORE
-        // =========================================================
+        // =====================================================
 
         private async void RestoreSelected(
-            object sender,
-            EventArgs e)
+    object sender,
+    EventArgs e)
         {
-            MessageBox.Show(
-                "Твой код восстановления можно оставить старый отсюда.");
-        }
+            List<RestoreItem> selectedItems =
+                new List<RestoreItem>();
 
-        // =========================================================
-        // HELPERS
-        // =========================================================
+            CollectCheckedItems(
+                backupTree.Nodes,
+                "",
+                selectedItems);
 
-        private void BrowseCustomPathBtn_Click(
-            object sender,
-            EventArgs e)
-        {
-            using FolderBrowserDialog fbd =
-                new FolderBrowserDialog();
-
-            if (fbd.ShowDialog()
-                == DialogResult.OK)
+            if (selectedItems.Count == 0)
             {
-                customRestorePath.Text =
-                    fbd.SelectedPath;
+                MessageBox.Show(
+                    "Ничего не выбрано.",
+                    "Restore",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                return;
             }
+
+            string restoreRoot = null;
+
+            if (!restoreToOriginalCheckBox.Checked)
+            {
+                if (string.IsNullOrWhiteSpace(
+                        customRestorePath.Text)
+                    ||
+                    !Directory.Exists(
+                        customRestorePath.Text))
+                {
+                    MessageBox.Show(
+                        "Выберите папку восстановления.",
+                        "Ошибка",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+
+                    return;
+                }
+
+                restoreRoot =
+                    customRestorePath.Text;
+            }
+
+            restoreBtn.Enabled = false;
+
+            progressBar.Value = 0;
+
+            progressBar.Maximum =
+                selectedItems.Count;
+
+            int success = 0;
+
+            int errors = 0;
+
+            statusLabel.Text =
+                "Восстановление...";
+
+            foreach (var item in selectedItems)
+            {
+                try
+                {
+                    if (!File.Exists(item.FullPath))
+                        continue;
+
+                    currentFileLabel.Text =
+                        item.RelativePath;
+
+                    string targetPath =
+                        GetTargetPath(
+                            item.FullPath,
+                            restoreRoot,
+                            restoreToOriginalCheckBox.Checked);
+
+                    if (string.IsNullOrWhiteSpace(
+                            targetPath))
+                    {
+                        errors++;
+
+                        Log(
+                            $"ERROR: invalid target path");
+
+                        continue;
+                    }
+
+                    string targetDir =
+                        Path.GetDirectoryName(targetPath);
+
+                    if (!Directory.Exists(targetDir))
+                    {
+                        Directory.CreateDirectory(
+                            targetDir);
+                    }
+
+                    File.Copy(
+                        item.FullPath,
+                        targetPath,
+                        overwriteCheckBox.Checked);
+
+                    success++;
+
+                    Log(
+                        $"OK: {item.RelativePath}");
+                }
+                catch (Exception ex)
+                {
+                    errors++;
+
+                    Log(
+                        $"ERROR: {ex.Message}");
+                }
+
+                progressBar.Value++;
+
+                await Task.Delay(10);
+            }
+
+            currentFileLabel.Text = "";
+
+            statusLabel.Text =
+                $"Готово | OK: {success} | ERR: {errors}";
+
+            restoreBtn.Enabled = true;
+
+            MessageBox.Show(
+                $"Восстановление завершено\n\n" +
+                $"Успешно: {success}\n" +
+                $"Ошибок: {errors}",
+                "Restore",
+                MessageBoxButtons.OK,
+                errors > 0
+                    ? MessageBoxIcon.Warning
+                    : MessageBoxIcon.Information);
         }
+
+        // =====================================================
+        // SELECTED
+        // =====================================================
 
         private void UpdateSelectedCount()
         {
@@ -976,7 +1040,135 @@ namespace AutoBackup
             selectedCountLabel.Text =
                 $"Выбрано: {count}";
         }
+        private void CollectCheckedItems(
+    TreeNodeCollection nodes,
+    string currentPath,
+    List<RestoreItem> items)
+        {
+            foreach (TreeNode node in nodes)
+            {
+                string nodePath =
+                    string.IsNullOrEmpty(currentPath)
+                    ? node.Text
+                    : Path.Combine(
+                        currentPath,
+                        node.Text);
 
+                if (node.Checked &&
+                    node.Tag != null)
+                {
+                    string fullPath =
+                        node.Tag.ToString();
+
+                    if (File.Exists(fullPath))
+                    {
+                        items.Add(
+                            new RestoreItem
+                            {
+                                FullPath = fullPath,
+
+                                RelativePath = nodePath
+                            });
+                    }
+                }
+
+                CollectCheckedItems(
+                    node.Nodes,
+                    nodePath,
+                    items);
+            }
+        }
+
+        private string GetTargetPath(
+            string sourcePath,
+            string restoreRoot,
+            bool restoreToOriginal)
+        {
+            string backupsRoot =
+                Path.Combine(
+                    Config.Current.DestinationFolder,
+                    "Backups");
+
+            string relative =
+                GetRelativePath(
+                    sourcePath,
+                    backupsRoot);
+
+            if (restoreToOriginal)
+            {
+                string[] parts =
+                    relative.Split(
+                        Path.DirectorySeparatorChar);
+
+                if (parts.Length < 2)
+                    return null;
+
+                string sourceRootName =
+                    parts[1];
+
+                string originalFolder =
+                    Config.Current.SourceFolders
+                        .FirstOrDefault(
+                            f =>
+                                Path.GetFileName(f)
+                                .Equals(
+                                    sourceRootName,
+                                    StringComparison.OrdinalIgnoreCase));
+
+                if (originalFolder == null)
+                    return null;
+
+                string rest =
+                    string.Join(
+                        Path.DirectorySeparatorChar.ToString(),
+                        parts.Skip(2));
+
+                return Path.Combine(
+                    originalFolder,
+                    rest);
+            }
+            else
+            {
+                int firstSep =
+                    relative.IndexOf(
+                        Path.DirectorySeparatorChar);
+
+                if (firstSep >= 0)
+                {
+                    relative =
+                        relative.Substring(firstSep + 1);
+                }
+
+                return Path.Combine(
+                    restoreRoot,
+                    relative);
+            }
+        }
+
+        private string GetRelativePath(
+            string fullPath,
+            string basePath)
+        {
+            if (!basePath.EndsWith(
+                    Path.DirectorySeparatorChar.ToString()))
+            {
+                basePath +=
+                    Path.DirectorySeparatorChar;
+            }
+
+            Uri baseUri =
+                new Uri(basePath);
+
+            Uri fullUri =
+                new Uri(fullPath);
+
+            return Uri.UnescapeDataString(
+                baseUri.MakeRelativeUri(fullUri)
+                    .ToString())
+                .Replace(
+                    '/',
+                    Path.DirectorySeparatorChar);
+        }
         private int CountCheckedItems(
             TreeNodeCollection nodes)
         {
@@ -995,26 +1187,94 @@ namespace AutoBackup
             return count;
         }
 
+        // =====================================================
+        // LOG
+        // =====================================================
+
         private void Log(string text)
         {
             logBox.AppendText(
-                $"[{DateTime.Now:HH:mm:ss}] " +
-                $"{text}" +
+                $"[{DateTime.Now:HH:mm:ss}] {text}" +
                 Environment.NewLine);
         }
 
-        private string GetSizeString(long bytes)
+        // =====================================================
+        // PATH
+        // =====================================================
+
+        private void BrowseCustomPathBtn_Click(
+            object sender,
+            EventArgs e)
         {
-            if (bytes < 1024)
-                return $"{bytes} Б";
+            using FolderBrowserDialog dialog =
+                new FolderBrowserDialog();
 
-            if (bytes < 1024 * 1024)
-                return $"{bytes / 1024.0:F1} KB";
+            if (dialog.ShowDialog()
+                == DialogResult.OK)
+            {
+                customRestorePath.Text =
+                    dialog.SelectedPath;
+            }
+        }
 
-            if (bytes < 1024 * 1024 * 1024)
-                return $"{bytes / 1024.0 / 1024.0:F1} MB";
+        // =====================================================
+        // DARK TITLEBAR
+        // =====================================================
 
-            return $"{bytes / 1024.0 / 1024.0 / 1024.0:F1} GB";
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd,
+            int attr,
+            ref int attrValue,
+            int attrSize);
+
+        private const int
+            DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+        private void EnableDarkTitleBar()
+        {
+            if (Environment.OSVersion.Version.Major >= 10)
+            {
+                int dark = 1;
+
+                DwmSetWindowAttribute(
+                    this.Handle,
+                    DWMWA_USE_IMMERSIVE_DARK_MODE,
+                    ref dark,
+                    sizeof(int));
+            }
+        }
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(
+    IntPtr hWnd,
+    string pszSubAppName,
+    string pszSubIdList);
+
+        [DllImport("uxtheme.dll", EntryPoint = "#135")]
+        private static extern int SetPreferredAppMode(
+            int appMode);
+
+        [DllImport("uxtheme.dll", EntryPoint = "#133")]
+        private static extern int AllowDarkModeForWindow(
+            IntPtr hWnd,
+            bool allow);
+
+        private void EnableDarkScrollBar(
+            Control control)
+        {
+            if (Environment.OSVersion.Version.Major >= 10)
+            {
+                SetPreferredAppMode(2);
+
+                AllowDarkModeForWindow(
+                    control.Handle,
+                    true);
+
+                SetWindowTheme(
+                    control.Handle,
+                    "DarkMode_Explorer",
+                    null);
+            }
         }
     }
 }
