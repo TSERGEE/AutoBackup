@@ -1,17 +1,24 @@
+using System;
+using System.Windows.Forms;
+
 namespace AutoBackup
 {
     internal static class Program
     {
-        /// <summary>
-        ///  The main entry point for the application.
-        /// </summary>
         [STAThread]
         static void Main()
         {
-            // To customize application configuration such as set high DPI settings or default font,
-            // see https://aka.ms/applicationconfiguration.
-            ApplicationConfiguration.Initialize();
-            Application.Run(new Form1());
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            // Глобальный перехват необработанных исключений (п.27)
+            AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                Exception ex = e.ExceptionObject as Exception;
+                string msg = ex?.Message ?? "Критическая ошибка. Подробности в логе.";
+                Logger.LogError("Unhandled", ex);
+                MessageBox.Show(msg, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            };
+            Application.Run(new TrayApplicationContext());
         }
     }
 }
