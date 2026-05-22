@@ -7,6 +7,8 @@ namespace AutoBackup
     {
         private NotifyIcon trayIcon;
         private MainForm mainForm;
+        private System.Threading.Timer schedulerTimer;
+        private DateTime lastBackupTime = DateTime.MinValue;
 
         public TrayApplicationContext()
         {
@@ -24,9 +26,18 @@ namespace AutoBackup
 
             // Запускаем главную логику
             Config.Load();
+            // Добавляем в автозагрузку (только если включено в настройках)
+            if (Config.Current.AutoStart)
+            {
+                Microsoft.Win32.RegistryKey rk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", true);
+                rk.SetValue("AutoBackup", System.Reflection.Assembly.GetExecutingAssembly().Location);
+            }
             Logger.Init();
             BackupManager.Initialize();
-            Scheduler.Start(); // свой таймер или задачи планировщика – для простоты используем таймер
+            TrayIconHelper.TrayIcon = trayIcon;
+
+            // Запускаем внутренний планировщик вместо Task Scheduler
+            StartInternalScheduler();
 
             // Если первый запуск, показываем мастер
             if (Config.Current.FirstRun)
@@ -34,7 +45,52 @@ namespace AutoBackup
                 ShowWizard();
             }
         }
+        private void StartInternalScheduler()
+        {
+            // Проверяем каждую минуту
+            schedulerTimer = new System.Threading.Timer(CheckSchedule, null, 0, 60000);
+        }
 
+        private void CheckSchedule(object state)
+        {
+            if (BackupManager.IsPaused()) return;
+            DateTime now = DateTime.Now;
+            bool shouldRun = false;
+
+            switch (Config.Current.BackupSchedule)
+            {
+                case "Daily":
+                    if ((now - lastBackupTime).TotalHours >= 24)
+                        shouldRun = true;
+                    break;
+                case "Weekly":
+                    if (now.DayOfWeek == DayOfWeek.Monday && (now - lastBackupTime).TotalDays >= 7)
+                        shouldRun = true;
+                    break;
+                case "OnSystemStart":
+                    if (lastBackupTime == DateTime.MinValue)
+                        shouldRun = true;
+                    break;
+                case "OnIdle":
+                    if (IsSystemIdle() && (now - lastBackupTime).TotalMinutes >= Config.Current.IdleMinutes)
+                        shouldRun = true;
+                    break;
+            }
+
+            if (shouldRun)
+            {
+                lastBackupTime = now;
+                Task.Run(() => BackupManager.RunBackup(false));
+            }
+        }
+
+        private bool IsSystemIdle()
+        {
+            // Реализация через GetLastInputInfo (требует P/Invoke)
+            // Для простоты пока возвращаем false, чтобы не мешать
+            // Можно добавить настоящую проверку позже
+            return false;
+        }
         private void ShowMainForm()
         {
             if (mainForm == null || mainForm.IsDisposed)

@@ -11,6 +11,7 @@ namespace AutoBackup
         private static string configPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AutoBackup", "config.json");
 
         public bool FirstRun { get; set; } = true;
+        public bool AutoStart { get; set; } = true;
         public List<string> SourceFolders { get; set; } = new List<string>();
         public string DestinationFolder { get; set; } = "";
         public string BackupSchedule { get; set; } = "Daily"; // Daily, Weekly, OnSystemStart, OnIdle
@@ -22,7 +23,8 @@ namespace AutoBackup
         public bool PauseOnBattery { get; set; } = true;
         public int RetryCount { get; set; } = 5;
         public int RetryInitialDelaySec { get; set; } = 1;
-
+        public int FullBackupIntervalDays { get; set; } = 7;
+        public int KeepFullBackupsCount { get; set; } = 4;
         public static void Load()
         {
             if (File.Exists(configPath))

@@ -80,6 +80,18 @@ namespace AutoBackup
             }
             return list;
         }
+        public static void ClearLog()
+        {
+            using (var conn = new SQLiteConnection(connectionString))
+            {
+                conn.Open();
+                using (var cmd = new SQLiteCommand("DELETE FROM Log", conn))
+                    cmd.ExecuteNonQuery();
+                // Опционально: вакуумирование базы данных
+                using (var cmd = new SQLiteCommand("VACUUM", conn))
+                    cmd.ExecuteNonQuery();
+            }
+        }
     }
 
     public class LogEntry
