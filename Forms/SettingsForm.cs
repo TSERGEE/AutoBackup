@@ -1,9 +1,10 @@
-﻿using System;
+﻿using AutoBackup.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace AutoBackup
+namespace AutoBackup.Forms
 {
     public class SettingsForm : Form
     {

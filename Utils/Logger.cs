@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Data.SQLite;
 using System.IO;
 
-namespace AutoBackup
+namespace AutoBackup.Utils
 {
     public static class Logger
     {

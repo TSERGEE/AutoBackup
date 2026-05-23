@@ -1,3 +1,5 @@
+using AutoBackup.Services;
+using AutoBackup.Utils;
 using System;
 using System.Windows.Forms;
 
@@ -10,14 +12,14 @@ namespace AutoBackup
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            // Глобальный перехват необработанных исключений (п.27)
+
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
                 Exception ex = e.ExceptionObject as Exception;
-                string msg = ex?.Message ?? "Критическая ошибка. Подробности в логе.";
                 Logger.LogError("Unhandled", ex);
-                MessageBox.Show(msg, "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show(ex?.Message ?? "Критическая ошибка.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Error);
             };
+
             Application.Run(new TrayApplicationContext());
         }
     }

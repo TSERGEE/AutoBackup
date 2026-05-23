@@ -1,1067 +1,419 @@
-﻿using System.Runtime.InteropServices;
-using Guna.UI2.WinForms;
-using System;
-using System.Collections;
-using System.Collections.Generic;
+﻿using System;
 using System.Drawing;
-using System.IO;
-using System.Linq;
-using System.Security.Cryptography;
+using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using AutoBackup.Models;
+using AutoBackup.Services;
+using AutoBackup.Controls;
+using Guna.UI2.WinForms;
 
 namespace AutoBackup
 {
     public class MainForm : Form
     {
-        // =====================================================
-        // UI
-        // =====================================================
+        private MenuStrip mainMenu;
+        private Guna2Panel sideMenuPanel;
+        private Guna2Panel contentPanel;
+        private StatusStrip statusStrip;
+        private ToolStripStatusLabel statusLabel;
+        private ToolStripStatusLabel nextRunLabel;
+        private ToolStripProgressBar toolProgressBar; // для статус-бара
 
-        private Guna2DataGridView logGrid;
-        private Guna2VScrollBar vScrollBar;
-        private Guna2Button backupBtn;
-        private Guna2Button restoreBtn;
-        private Guna2Button verifyBtn;
-        private Guna2Button settingsBtn;
-        private Guna2Button pauseBtn;
-        private Guna2Button exportBtn;
-        private Guna2Button clearBtn;
-        private Label statusLabel;
-        private Label nextRunLabel;
+        private Guna2Button dashboardBtn, settingsBtn, aboutBtn, pauseBtn;
+        private UserControl activeControl;
 
-        private Guna2TextBox searchBox;
+        // Токен отмены для текущей операции (бэкап или восстановление)
+        private CancellationTokenSource currentCts;
 
-        private Guna2ComboBox filterBox;
-
-        private Guna2ProgressBar progressBar;
-
-        private System.Windows.Forms.Timer refreshTimer;
-
-        // =====================================================
-        // CTOR
-        // =====================================================
+        // Цвета для кнопок меню
+        private readonly Color activeColor = Color.FromArgb(0, 120, 215);
+        private readonly Color normalColor = Color.Transparent;
 
         public MainForm()
         {
             InitializeComponents();
-
             EnableDarkTitleBar();
-
-            LoadLog();
-            
+            SubscribeToBackupManagerEvents();
+            ShowDashboard();
             UpdateNextRunInfo();
 
-            StartRefreshTimer();
+            // Таймер обновления статуса расписания
+            var timer = new System.Windows.Forms.Timer { Interval = 30000 };
+            timer.Tick += (s, e) => UpdateNextRunInfo();
+            timer.Start();
         }
-
-        // =====================================================
-        // INIT
-        // =====================================================
 
         private void InitializeComponents()
         {
-            Text = "AutoBackup";
-
+            Text = "AutoBackup Professional";
             Width = 1400;
             Height = 850;
-
             MinimumSize = new Size(1100, 700);
-
             StartPosition = FormStartPosition.CenterScreen;
-
-            FormBorderStyle = FormBorderStyle.Sizable;
-
-            DoubleBuffered = true;
-
             BackColor = Color.FromArgb(24, 24, 27);
-
             Font = new Font("Segoe UI", 9F);
 
-            // =================================================
-            // MAIN LAYOUT
-            // =================================================
-
-            TableLayoutPanel layout =
-                new TableLayoutPanel();
-
-            layout.Dock = DockStyle.Fill;
-
-            layout.RowCount = 4;
-
-            layout.ColumnCount = 1;
-
-            layout.Padding = new Padding(12);
-
-            layout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 70));
-
-            layout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 110));
-
-            layout.RowStyles.Add(
-                new RowStyle(SizeType.Absolute, 55));
-
-            layout.RowStyles.Add(
-                new RowStyle(SizeType.Percent, 100));
-
-            Controls.Add(layout);
-            
-            // =================================================
-            // TOOLBAR
-            // =================================================
-
-            Guna2Panel toolbarPanel =
-                CreatePanel();
-
-            layout.Controls.Add(toolbarPanel);
-
-            FlowLayoutPanel toolbar =
-                new FlowLayoutPanel();
-
-            toolbar.Dock = DockStyle.Fill;
-
-            toolbar.Padding = new Padding(10);
-
-            toolbar.BackColor = Color.Transparent;
-
-            toolbarPanel.Controls.Add(toolbar);
-
-            backupBtn =
-                CreatePrimaryButton("▶ Backup");
-
-            restoreBtn =
-                CreateSecondaryButton("↺ Restore");
-
-            verifyBtn =
-                CreateSecondaryButton("✓ Verify");
-
-            settingsBtn =
-                CreateSecondaryButton("⚙ Settings");
-
-            pauseBtn =
-                CreateWarningButton("⏸ Pause");
-
-            exportBtn =
-                CreateSecondaryButton("💾 Export");
-
-            clearBtn =
-                CreateDangerButton("🗑 Clear");
-
-            toolbar.Controls.AddRange(new Control[]
+            // ========== ГЛАВНОЕ МЕНЮ ==========
+            mainMenu = new MenuStrip
             {
-                backupBtn,
-                restoreBtn,
-                verifyBtn,
-                settingsBtn,
-                pauseBtn,
-                exportBtn,
-                clearBtn
-            });
-
-            // =================================================
-            // DASHBOARD
-            // =================================================
-
-            Guna2Panel dashboard =
-                CreatePanel();
-
-            dashboard.Padding = new Padding(20);
-
-            layout.Controls.Add(dashboard);
-
-            statusLabel = new Label();
-
-            statusLabel.Text =
-                "Статус: Готов";
-
-            statusLabel.ForeColor =
-                Color.White;
-
-            statusLabel.Font =
-                new Font(
-                    "Segoe UI",
-                    11F,
-                    FontStyle.Bold);
-
-            statusLabel.Location =
-                new Point(20, 20);
-
-            statusLabel.AutoSize = true;
-
-            nextRunLabel = new Label();
-
-            nextRunLabel.Text =
-                "Следующий запуск: не запланирован";
-
-            nextRunLabel.ForeColor =
-                Color.Silver;
-
-            nextRunLabel.Location =
-                new Point(20, 55);
-
-            nextRunLabel.AutoSize = true;
-
-            progressBar =
-                new Guna2ProgressBar();
-
-            progressBar.Location =
-                new Point(500, 30);
-
-            progressBar.Size =
-                new Size(400, 25);
-
-            progressBar.BorderRadius = 10;
-
-            progressBar.FillColor =
-                Color.FromArgb(50, 50, 55);
-
-            progressBar.ProgressColor =
-                Color.FromArgb(0, 120, 215);
-
-            dashboard.Controls.Add(statusLabel);
-
-            dashboard.Controls.Add(nextRunLabel);
-
-            dashboard.Controls.Add(progressBar);
-
-            // =================================================
-            // FILTER PANEL
-            // =================================================
-
-            Guna2Panel filterPanel =
-                CreatePanel();
-
-            filterPanel.Padding =
-                new Padding(15, 10, 15, 10);
-
-            layout.Controls.Add(filterPanel);
-
-            searchBox =
-                new Guna2TextBox();
-
-            searchBox.PlaceholderText =
-                "Поиск по логам...";
-
-            searchBox.BorderRadius = 10;
-
-            searchBox.FillColor =
-                Color.FromArgb(35, 35, 40);
-
-            searchBox.ForeColor =
-                Color.White;
-
-            searchBox.Size =
-                new Size(300, 36);
-
-            searchBox.Location =
-                new Point(15, 8);
-
-            searchBox.TextChanged +=
-                (s, e) => LoadLog();
-
-            filterBox =
-                new Guna2ComboBox();
-
-            filterBox.Items.AddRange(new object[]
-            {
-                "Все",
-                "Info",
-                "Warning",
-                "Error"
-            });
-
-            filterBox.SelectedIndex = 0;
-
-            filterBox.BorderRadius = 10;
-
-            filterBox.FillColor =
-                Color.FromArgb(35, 35, 40);
-
-            filterBox.ForeColor =
-                Color.White;
-
-            filterBox.Size =
-                new Size(180, 36);
-
-            filterBox.Location =
-                new Point(340, 8);
-
-            filterBox.SelectedIndexChanged +=
-                (s, e) => LoadLog();
-
-            filterPanel.Controls.Add(searchBox);
-
-            filterPanel.Controls.Add(filterBox);
-
-            // =================================================
-            // GRID
-            // =================================================
-
-            logGrid =
-                new Guna2DataGridView();
-
-            logGrid.Dock = DockStyle.Fill;
-
-            logGrid.BackgroundColor =
-                Color.FromArgb(24, 24, 27);
-
-            logGrid.GridColor =
-                Color.FromArgb(55, 55, 60);
-
-            logGrid.BorderStyle =
-                BorderStyle.None;
-
-            logGrid.RowHeadersVisible = false;
-
-            logGrid.EnableHeadersVisualStyles = false;
-
-            logGrid.ColumnHeadersHeight = 40;
-
-            logGrid.ThemeStyle.BackColor =
-                Color.FromArgb(24, 24, 27);
-
-            logGrid.ThemeStyle.GridColor =
-                Color.FromArgb(55, 55, 60);
-
-            logGrid.ThemeStyle.HeaderStyle.BackColor =
-                Color.FromArgb(45, 45, 50);
-
-            logGrid.ThemeStyle.HeaderStyle.ForeColor =
-                Color.White;
-
-            logGrid.ThemeStyle.RowsStyle.BackColor =
-                Color.FromArgb(35, 35, 40);
-
-            logGrid.ThemeStyle.RowsStyle.ForeColor =
-                Color.White;
-
-            logGrid.ThemeStyle.RowsStyle.SelectionBackColor =
-                Color.FromArgb(0, 120, 215);
-
-            logGrid.ThemeStyle.RowsStyle.SelectionForeColor =
-                Color.White;
-
-            logGrid.ThemeStyle.AlternatingRowsStyle.BackColor =
-                Color.FromArgb(35, 35, 40);
-
-            logGrid.DefaultCellStyle.BackColor =
-                Color.FromArgb(35, 35, 40);
-
-            logGrid.RowsDefaultCellStyle.BackColor =
-                Color.FromArgb(35, 35, 40);
-
-            logGrid.AlternatingRowsDefaultCellStyle.BackColor =
-                Color.FromArgb(35, 35, 40);
-
-            logGrid.DefaultCellStyle.ForeColor =
-                Color.White;
-
-            logGrid.RowTemplate.Height = 34;
-
-            logGrid.Columns.Add(
-                "Timestamp",
-                "Дата/время");
-
-            logGrid.Columns.Add(
-                "Operation",
-                "Операция");
-
-            logGrid.Columns.Add(
-                "Details",
-                "Подробности");
-
-            logGrid.Columns.Add(
-                "Status",
-                "Статус");
-            logGrid.MouseWheel += (s, e) =>
-            {
-                try
-                {
-                    if (logGrid.Rows.Count == 0)
-                        return;
-
-                    int current =
-                        logGrid.FirstDisplayedScrollingRowIndex;
-
-                    if (e.Delta > 0)
-                    {
-                        current -= 3;
-                    }
-                    else
-                    {
-                        current += 3;
-                    }
-
-                    current = Math.Max(
-                        0,
-                        Math.Min(
-                            current,
-                            logGrid.Rows.Count - 1));
-
-                    logGrid.FirstDisplayedScrollingRowIndex =
-                        current;
-
-                    vScrollBar.Value =
-                        current;
-                }
-                catch
-                {
-                }
-            };
-            // =================================================
-            // GRID CONTAINER
-            // =================================================
-
-            Panel gridContainer = new Panel();
-
-            gridContainer.Dock = DockStyle.Fill;
-
-            gridContainer.BackColor =
-                Color.FromArgb(24, 24, 27);
-
-            // скрываем системный scrollbar
-            logGrid.ScrollBars = ScrollBars.None;
-
-            // grid
-            logGrid.Dock = DockStyle.Fill;
-
-            // custom scrollbar
-            vScrollBar = new Guna2VScrollBar();
-
-            vScrollBar.Dock = DockStyle.Right;
-
-            vScrollBar.Width = 14;
-
-            vScrollBar.FillColor =
-                Color.FromArgb(30, 30, 35);
-
-            vScrollBar.ThumbColor =
-                Color.FromArgb(80, 80, 90);
-
-            vScrollBar.BorderRadius = 7;
-
-            // sync scrollbar -> grid
-            vScrollBar.Scroll += (s, e) =>
-            {
-                try
-                {
-                    if (logGrid.Rows.Count > 0)
-                    {
-                        logGrid.FirstDisplayedScrollingRowIndex =
-                            Math.Min(
-                                vScrollBar.Value,
-                                logGrid.Rows.Count - 1);
-                    }
-                }
-                catch
-                {
-                }
+                BackColor = Color.FromArgb(45, 45, 50),
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 9F)
             };
 
-            // sync mousewheel -> scrollbar
-            logGrid.MouseWheel += (s, e) =>
+            var fileMenu = new ToolStripMenuItem("Файл");
+            fileMenu.DropDownItems.Add("Экспорт конфигурации", null, (s, e) => ExportConfig());
+            fileMenu.DropDownItems.Add("Импорт конфигурации", null, (s, e) => ImportConfig());
+            fileMenu.DropDownItems.Add(new ToolStripSeparator());
+            fileMenu.DropDownItems.Add("Выход", null, (s, e) => Close());
+
+            var toolsMenu = new ToolStripMenuItem("Сервис");
+            toolsMenu.DropDownItems.Add("Очистить старые бэкапы", null, (s, e) => CleanOldBackups());
+            toolsMenu.DropDownItems.Add("Проверить целостность бэкапов", null, (s, e) => VerifyAllBackups());
+            toolsMenu.DropDownItems.Add(new ToolStripSeparator());
+            toolsMenu.DropDownItems.Add("Статистика", null, (s, e) => ShowStatistics());
+            toolsMenu.DropDownItems.Add("Открыть папку бэкапов", null, (s, e) => OpenBackupFolder());
+
+            var helpMenu = new ToolStripMenuItem("Справка");
+            helpMenu.DropDownItems.Add("О программе", null, (s, e) => ShowAbout());
+
+            mainMenu.Items.Add(fileMenu);
+            mainMenu.Items.Add(toolsMenu);
+            mainMenu.Items.Add(helpMenu);
+
+            // ========== ЛЕВОЕ МЕНЮ (ПАНЕЛЬ КНОПОК) ==========
+            sideMenuPanel = new Guna2Panel
             {
-                try
-                {
-                    if (logGrid.FirstDisplayedScrollingRowIndex >= 0)
-                    {
-                        vScrollBar.Value =
-                            logGrid.FirstDisplayedScrollingRowIndex;
-                    }
-                }
-                catch
-                {
-                }
+                Dock = DockStyle.Left,
+                Width = 220,
+                FillColor = Color.FromArgb(32, 32, 38),
+                BorderRadius = 0
             };
 
-            gridContainer.Controls.Add(logGrid);
-
-            gridContainer.Controls.Add(vScrollBar);
-
-            layout.Controls.Add(gridContainer);
-            //EnableDarkScrollBar(logGrid);
-
-            // =================================================
-            // EVENTS
-            // =================================================
-
-            backupBtn.Click += BackupNow;
-
-            restoreBtn.Click +=
-                (s, e) =>
-                {
-                    new RestoreForm().ShowDialog();
-                };
-
-            settingsBtn.Click +=
-                (s, e) =>
-                {
-                    new SettingsForm().ShowDialog();
-
-                    UpdateNextRunInfo();
-                };
-
+            int btnY = 20;
+            dashboardBtn = CreateSideButton("  Главная", "🏠", btnY, true); btnY += 60;
+            settingsBtn = CreateSideButton("  Настройки", "⚙️", btnY, false); btnY += 60;
+            aboutBtn = CreateSideButton("  О программе", "ℹ️", btnY, false); btnY += 60;
+            pauseBtn = CreateSideButton("  Пауза", "⏸", btnY, false);
+            pauseBtn.FillColor = Color.Goldenrod;
             pauseBtn.Click += TogglePause;
 
-            verifyBtn.Click += VerifyBackup;
+            sideMenuPanel.Controls.Add(dashboardBtn);
+            sideMenuPanel.Controls.Add(settingsBtn);
+            sideMenuPanel.Controls.Add(aboutBtn);
+            sideMenuPanel.Controls.Add(pauseBtn);
 
-            exportBtn.Click += ExportLog;
-
-            clearBtn.Click += ClearLog;
-        }
-
-        // =====================================================
-        // PANEL
-        // =====================================================
-
-        private Guna2Panel CreatePanel()
-        {
-            return new Guna2Panel
+            // ========== ЦЕНТРАЛЬНАЯ ОБЛАСТЬ ==========
+            contentPanel = new Guna2Panel
             {
                 Dock = DockStyle.Fill,
-
-                BorderRadius = 18,
-
-                FillColor = Color.FromArgb(30, 30, 35)
+                FillColor = Color.FromArgb(24, 24, 27),
+                Padding = new Padding(15)
             };
-        }
 
-        // =====================================================
-        // BUTTONS
-        // =====================================================
-
-        private Guna2Button CreatePrimaryButton(
-            string text)
-        {
-            return new Guna2Button
+            // ========== СТРОКА СОСТОЯНИЯ ==========
+            statusStrip = new StatusStrip
             {
-                Text = text,
-
-                Width = 130,
-
-                Height = 42,
-
-                BorderRadius = 12,
-
-                FillColor =
-                    Color.FromArgb(0, 120, 215),
-
-                Font =
-                    new Font(
-                        "Segoe UI",
-                        9F,
-                        FontStyle.Bold),
-
+                BackColor = Color.FromArgb(30, 30, 35),
                 ForeColor = Color.White
             };
-        }
-
-        private Guna2Button CreateSecondaryButton(
-            string text)
-        {
-            return new Guna2Button
+            statusLabel = new ToolStripStatusLabel(" Статус: Готов");
+            nextRunLabel = new ToolStripStatusLabel(" Расписание: не задано");
+            toolProgressBar = new ToolStripProgressBar
             {
-                Text = text,
-
-                Width = 120,
-
-                Height = 42,
-
-                BorderRadius = 12,
-
-                FillColor =
-                    Color.FromArgb(45, 45, 50),
-
-                Font =
-                    new Font(
-                        "Segoe UI",
-                        9F),
-
-                ForeColor = Color.White
-            };
-        }
-
-        private Guna2Button CreateWarningButton(
-            string text)
-        {
-            return new Guna2Button
-            {
-                Text = text,
-
-                Width = 120,
-
-                Height = 42,
-
-                BorderRadius = 12,
-
-                FillColor =
-                    Color.Goldenrod,
-
-                ForeColor = Color.White
-            };
-        }
-
-        private Guna2Button CreateDangerButton(
-            string text)
-        {
-            return new Guna2Button
-            {
-                Text = text,
-
-                Width = 120,
-
-                Height = 42,
-
-                BorderRadius = 12,
-
-                FillColor =
-                    Color.Firebrick,
-
-                ForeColor = Color.White
-            };
-        }
-
-        // =====================================================
-        // TIMER
-        // =====================================================
-
-        private void StartRefreshTimer()
-        {
-            refreshTimer =
-                new System.Windows.Forms.Timer();
-
-            refreshTimer.Interval = 30000;
-
-            refreshTimer.Tick +=
-                (s, e) =>
-                {
-                    LoadLog();
-
-                    UpdateNextRunInfo();
-                };
-
-            refreshTimer.Start();
-        }
-
-        // =====================================================
-        // LOAD LOG
-        // =====================================================
-
-        private void LoadLog()
-        {
-            if (logGrid.Columns.Count == 0)
-                return;
-            logGrid.Rows.Clear();
-
-            string filter =
-                filterBox.SelectedItem?.ToString();
-
-            string search =
-                searchBox.Text.ToLower();
-
-            var entries =
-                Logger.GetRecentEntries(300);
-
-            if (filter != "Все")
-            {
-                entries = entries
-                    .Where(x => x.Status == filter)
-                    .ToList();
-            }
-
-            if (!string.IsNullOrWhiteSpace(search))
-            {
-                entries = entries
-                    .Where(x =>
-                        x.Operation
-                            .ToLower()
-                            .Contains(search)
-                        ||
-                        x.Details
-                            .ToLower()
-                            .Contains(search))
-                    .ToList();
-            }
-
-            foreach (var entry in entries)
-            {
-                int row =
-                    logGrid.Rows.Add(
-                        entry.Timestamp,
-                        entry.Operation,
-                        entry.Details,
-                        entry.Status);
-
-                if (entry.Status == "Error")
-                {
-                    logGrid.Rows[row]
-                        .DefaultCellStyle
-                        .BackColor =
-                        Color.FromArgb(70, 25, 25);
-                }
-                else if (entry.Status == "Warning")
-                {
-                    logGrid.Rows[row]
-                        .DefaultCellStyle
-                        .BackColor =
-                        Color.FromArgb(70, 60, 25);
-                }
-                
-            }
-            if (logGrid.Rows.Count > 0)
-            {
-                vScrollBar.Maximum =
-                    Math.Max(0, logGrid.Rows.Count - 1);
-
-                vScrollBar.LargeChange = 10;
-            }
-        }
-
-        // =====================================================
-        // UPDATE SCHEDULE
-        // =====================================================
-
-        private void UpdateNextRunInfo()
-        {
-            string schedule =
-                Config.Current.BackupSchedule;
-
-            string text = schedule switch
-            {
-                "Daily" =>
-                    "ежедневно",
-
-                "Weekly" =>
-                    "еженедельно",
-
-                "OnSystemStart" =>
-                    "при запуске системы",
-
-                "OnIdle" =>
-                    $"при простое ({Config.Current.IdleMinutes} мин)",
-
-                _ =>
-                    "не задано"
+                Size = new Size(200, 18),
+                Style = ProgressBarStyle.Continuous,
+                Visible = false
             };
 
-            nextRunLabel.Text =
-                $"Расписание: {text}";
+            statusStrip.Items.Add(statusLabel);
+            statusStrip.Items.Add(nextRunLabel);
+            statusStrip.Items.Add(new ToolStripStatusLabel("  "));
+            statusStrip.Items.Add(toolProgressBar);
+
+            // Сборка формы
+            Controls.Add(contentPanel);
+            Controls.Add(sideMenuPanel);
+            Controls.Add(mainMenu);
+            Controls.Add(statusStrip);
+
+            mainMenu.Padding = new Padding(5, 2, 0, 2);
+            statusStrip.Padding = new Padding(10, 0, 10, 0);
         }
 
-        // =====================================================
-        // BACKUP
-        // =====================================================
-
-        private async void BackupNow(
-            object sender,
-            EventArgs e)
+        private Guna2Button CreateSideButton(string text, string icon, int top, bool isActive)
         {
-            try
+            var btn = new Guna2Button
             {
-                backupBtn.Enabled = false;
+                Text = $"{icon} {text}",
+                Dock = DockStyle.Top,
+                Height = 50,
+                Margin = new Padding(10, 5, 10, 0),
+                FillColor = isActive ? activeColor : normalColor,
+                HoverState = { FillColor = Color.FromArgb(60, 60, 70) },
+                ForeColor = Color.White,
+                Font = new Font("Segoe UI", 10F),
+                TextAlign = HorizontalAlignment.Left,
+                BorderRadius = 8
+            };
+            btn.Click += (s, e) => ActivateButton(btn, text);
+            return btn;
+        }
 
-                progressBar.Style =
-                    ProgressBarStyle.Marquee;
+        private void ActivateButton(Guna2Button clickedBtn, string text)
+        {
+            foreach (var btn in new[] { dashboardBtn, settingsBtn, aboutBtn, pauseBtn })
+                btn.FillColor = normalColor;
 
-                statusLabel.Text =
-                    "Статус: Выполняется backup...";
+            clickedBtn.FillColor = activeColor;
 
-                await BackupManager.RunBackup(true);
-
-                LoadLog();
-
-                statusLabel.Text =
-                    "Статус: Backup завершён";
-            }
-            finally
+            switch (text)
             {
-                progressBar.Style =
-                    ProgressBarStyle.Blocks;
-
-                backupBtn.Enabled = true;
+                case "  Главная": ShowDashboard(); break;
+                case "  Настройки": ShowSettings(); break;
+                case "  О программе": ShowAbout(); break;
+                    // pauseBtn не переключает вьюху
             }
         }
 
-        // =====================================================
-        // PAUSE
-        // =====================================================
+        private void ShowDashboard()
+        {
+            SetActiveControl(new BackupControl());
+        }
 
-        private void TogglePause(
-            object sender,
-            EventArgs e)
+        private void ShowSettings()
+        {
+            SetActiveControl(new SettingsControl());
+        }
+
+        private void ShowAbout()
+        {
+            SetActiveControl(new AboutControl());
+        }
+
+        private void SetActiveControl(UserControl control)
+        {
+            if (activeControl != null)
+                contentPanel.Controls.Remove(activeControl);
+
+            activeControl = control;
+            control.Dock = DockStyle.Fill;
+            control.BackColor = Color.FromArgb(24, 24, 27);
+            contentPanel.Controls.Add(control);
+        }
+
+        // =====================================================
+        // Обработчики меню и кнопок
+        // =====================================================
+        private void TogglePause(object sender, EventArgs e)
         {
             if (BackupManager.IsPaused())
             {
                 BackupManager.Resume();
-
-                pauseBtn.Text = "⏸ Pause";
-
-                pauseBtn.FillColor =
-                    Color.Goldenrod;
-
-                statusLabel.Text =
-                    "Статус: Активен";
+                pauseBtn.Text = "⏸  Пауза";
+                pauseBtn.FillColor = Color.Goldenrod;
+                statusLabel.Text = "Статус: Активен";
             }
             else
             {
                 BackupManager.PauseFor(60);
-
-                pauseBtn.Text =
-                    "▶ Resume";
-
-                pauseBtn.FillColor =
-                    Color.ForestGreen;
-
-                statusLabel.Text =
-                    "Статус: Пауза";
+                pauseBtn.Text = "▶  Возобновить";
+                pauseBtn.FillColor = Color.ForestGreen;
+                statusLabel.Text = "Статус: Пауза";
             }
         }
 
-        // =====================================================
-        // VERIFY
-        // =====================================================
-
-        private async void VerifyBackup(
-            object sender,
-            EventArgs e)
+        private void ExportConfig()
         {
-            using FolderBrowserDialog dialog =
-                new FolderBrowserDialog();
-
-            dialog.Description =
-                "Выберите backup folder";
-
-            if (dialog.ShowDialog()
-                != DialogResult.OK)
-                return;
-
-            string backupFolder =
-                dialog.SelectedPath;
-
-            List<string> mismatches =
-                new List<string>();
-
-            int totalFiles = 0;
-
-            int verified = 0;
-
-            progressBar.Style =
-                ProgressBarStyle.Marquee;
-
-            await Task.Run(() =>
+            using (SaveFileDialog sfd = new SaveFileDialog())
             {
-                foreach (string sourceRoot
-                    in Config.Current.SourceFolders)
+                sfd.Filter = "JSON файлы|*.json";
+                sfd.FileName = $"autobackup_config_{DateTime.Now:yyyyMMdd}.json";
+                if (sfd.ShowDialog() == DialogResult.OK)
                 {
-                    string sourceDirName =
-                        Path.GetFileName(sourceRoot);
-
-                    string backupSourceDir =
-                        Path.Combine(
-                            backupFolder,
-                            sourceDirName);
-
-                    if (!Directory.Exists(
-                        backupSourceDir))
-                        continue;
-
-                    VerifyDirectory(
-                        sourceRoot,
-                        backupSourceDir,
-                        mismatches,
-                        ref totalFiles,
-                        ref verified);
+                    Config.Export(sfd.FileName);
+                    MessageBox.Show("Конфигурация экспортирована.", "Успех", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
-            });
+            }
+        }
 
-            progressBar.Style =
-                ProgressBarStyle.Blocks;
+        private void ImportConfig()
+        {
+            using (OpenFileDialog ofd = new OpenFileDialog())
+            {
+                ofd.Filter = "JSON файлы|*.json";
+                if (ofd.ShowDialog() == DialogResult.OK)
+                {
+                    Config.Import(ofd.FileName);
+                    MessageBox.Show("Конфигурация импортирована. Перезапустите программу для полного применения.", "Успех",
+                        MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+        }
 
+        private void CleanOldBackups()
+        {
+            if (MessageBox.Show("Удалить все бэкапы старше указанного в настройках срока?\n(Данные будут безвозвратно удалены)",
+                "Очистка старых версий", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
+            {
+                BackupManager.CleanupOldBackups();
+                MessageBox.Show("Очистка завершена.", "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+
+        private void VerifyAllBackups()
+        {
+            MessageBox.Show("Для проверки целостности используйте кнопку 'Verify' на главной панели.\n" +
+                "Или выберите папку с бэкапом через меню Сервис → Открыть папку бэкапов.",
+                "Подсказка", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+
+        private async void ShowStatistics()
+        {
+            var info = BackupManager.GetLastBackupInfo();
+            long totalSize = BackupManager.GetTotalBackupSize();
+            string sizeStr = FormatSize(totalSize);
+            string lastTime = info.LastBackupTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "никогда";
             MessageBox.Show(
-                $"Проверено: {verified}\n" +
-                $"Ошибок: {mismatches.Count}",
-                "Verify",
-                MessageBoxButtons.OK,
-                mismatches.Count > 0
-                    ? MessageBoxIcon.Warning
-                    : MessageBoxIcon.Information);
+                $"📊 Статистика резервного копирования\n\n" +
+                $"✅ Успешных бэкапов: {info.TotalFiles}\n" +
+                $"📅 Последний бэкап: {lastTime}\n" +
+                $"💾 Общий размер бэкапов: {sizeStr}\n" +
+                $"📁 Папка хранения: {Config.Current.DestinationFolder}",
+                "Статистика", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
-        // =====================================================
-        // VERIFY DIR
-        // =====================================================
-
-        private void VerifyDirectory(
-            string originalDir,
-            string backupDir,
-            List<string> mismatches,
-            ref int totalFiles,
-            ref int verified)
+        private void OpenBackupFolder()
         {
-            foreach (string file
-                in Directory.GetFiles(originalDir))
+            if (Directory.Exists(Config.Current.DestinationFolder))
+                System.Diagnostics.Process.Start("explorer.exe", Config.Current.DestinationFolder);
+            else
+                MessageBox.Show("Папка назначения не существует.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
+        private string FormatSize(long bytes)
+        {
+            string[] sizes = { "Б", "КБ", "МБ", "ГБ", "ТБ" };
+            double len = bytes;
+            int order = 0;
+            while (len >= 1024 && order < sizes.Length - 1)
             {
-                string fileName =
-                    Path.GetFileName(file);
-
-                if (ShouldExclude(fileName))
-                    continue;
-
-                totalFiles++;
-
-                string backupFile =
-                    Path.Combine(
-                        backupDir,
-                        fileName);
-
-                if (!File.Exists(backupFile))
-                {
-                    mismatches.Add(
-                        $"Отсутствует: {file}");
-
-                    continue;
-                }
-
-                if (!CompareFileHash(
-                    file,
-                    backupFile))
-                {
-                    mismatches.Add(
-                        $"Hash mismatch: {file}");
-                }
-
-                verified++;
+                order++;
+                len /= 1024;
             }
+            return $"{len:0.##} {sizes[order]}";
         }
 
         // =====================================================
-        // HASH
+        // Подписка на события BackupManager
         // =====================================================
-
-        private bool CompareFileHash(
-            string file1,
-            string file2)
+        private void SubscribeToBackupManagerEvents()
         {
-            using SHA256 sha =
-                SHA256.Create();
-
-            using FileStream fs1 =
-                File.OpenRead(file1);
-
-            using FileStream fs2 =
-                File.OpenRead(file2);
-
-            byte[] hash1 =
-                sha.ComputeHash(fs1);
-
-            byte[] hash2 =
-                sha.ComputeHash(fs2);
-
-            return StructuralComparisons
-                .StructuralEqualityComparer
-                .Equals(hash1, hash2);
-        }
-
-        // =====================================================
-        // EXCLUDE
-        // =====================================================
-
-        private bool ShouldExclude(
-            string fileName)
-        {
-            foreach (string mask
-                in Config.Current.ExcludeMasks)
+            BackupManager.ProgressChanged += OnProgressChanged;
+            BackupManager.StatusChanged += OnStatusChanged;
+            BackupManager.Notification += (title, text) =>
             {
-                if (mask.StartsWith("*.") &&
-                    fileName.EndsWith(mask.Substring(1)))
-                    return true;
-            }
-
-            return false;
+                if (InvokeRequired) { Invoke(() => BackupManager_Notification(title, text)); }
+                else BackupManager_Notification(title, text);
+            };
+        }
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            // Отписываемся от событий, чтобы избежать вызовов после уничтожения формы
+            BackupManager.ProgressChanged -= OnProgressChanged;
+            BackupManager.StatusChanged -= OnStatusChanged;
+            base.OnFormClosing(e);
         }
 
-        // =====================================================
-        // EXPORT
-        // =====================================================
-
-        private void ExportLog(
-            object sender,
-            EventArgs e)
+        protected override void Dispose(bool disposing)
         {
-            using SaveFileDialog sfd =
-                new SaveFileDialog();
+            if (disposing)
+            {
+                BackupManager.ProgressChanged -= OnProgressChanged;
+                BackupManager.StatusChanged -= OnStatusChanged;
+                //components?.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+        private void OnProgressChanged(int percent, string fileName)
+        {
+            // Если форма уже уничтожена – игнорируем
+            if (IsDisposed) return;
 
-            sfd.Filter =
-                "CSV files|*.csv";
-
-            if (sfd.ShowDialog()
-                != DialogResult.OK)
+            if (InvokeRequired)
+            {
+                Invoke(() => OnProgressChanged(percent, fileName));
                 return;
-
-            List<string> lines =
-                new List<string>();
-
-            foreach (DataGridViewRow row
-                in logGrid.Rows)
-            {
-                lines.Add(
-                    string.Join(
-                        ";",
-                        row.Cells
-                            .Cast<DataGridViewCell>()
-                            .Select(c =>
-                                c.Value?.ToString() ?? "")));
             }
 
-            File.WriteAllLines(
-                sfd.FileName,
-                lines);
+            // Повторная проверка, т.к. за время Invoke форма могла быть закрыта
+            if (IsDisposed || toolProgressBar == null || statusLabel == null) return;
 
-            MessageBox.Show(
-                "Лог экспортирован.");
+            if (percent >= 0 && percent <= 100)
+            {
+                toolProgressBar.Visible = true;
+                toolProgressBar.Value = percent;
+                if (percent == 100)
+                {
+                    toolProgressBar.Visible = false;
+                    statusLabel.Text = "Статус: Готов";
+                }
+                else
+                {
+                    statusLabel.Text = $"Статус: Копирование ({percent}%) - {Path.GetFileName(fileName)}";
+                }
+            }
         }
 
-        // =====================================================
-        // CLEAR
-        // =====================================================
-
-        private void ClearLog(
-            object sender,
-            EventArgs e)
+        private void OnStatusChanged(string status)
         {
-            if (MessageBox.Show(
-                "Очистить лог?",
-                "Подтверждение",
-                MessageBoxButtons.YesNo)
-                != DialogResult.Yes)
+            if (IsDisposed) return;
+            if (InvokeRequired)
+            {
+                Invoke(() => OnStatusChanged(status));
                 return;
-
-            Logger.ClearLog();
-
-            LoadLog();
+            }
+            if (IsDisposed || statusLabel == null) return;
+            statusLabel.Text = $"Статус: {status}";
         }
+
+        private void BackupManager_Notification(string title, string text)
+        {
+            TrayIconHelper.ShowBalloon(title, text);
+        }
+
+        // =====================================================
+        // Обновление информации о расписании
+        // =====================================================
+        private void UpdateNextRunInfo()
+        {
+            string schedule = Config.Current.BackupSchedule;
+            string text = schedule switch
+            {
+                "Daily" => "ежедневно",
+                "Weekly" => "еженедельно",
+                "OnSystemStart" => "при запуске системы",
+                "OnIdle" => $"при простое ({Config.Current.IdleMinutes} мин)",
+                _ => "не задано"
+            };
+            nextRunLabel.Text = $" Расписание: {text}";
+        }
+
+        // =====================================================
+        // Тёмный заголовок окна
+        // =====================================================
         [DllImport("dwmapi.dll")]
-        private static extern int DwmSetWindowAttribute(
-            IntPtr hwnd,
-            int attr,
-            ref int attrValue,
-            int attrSize);
-
+        private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
         private void EnableDarkTitleBar()
         {
             if (Environment.OSVersion.Version.Major >= 10)
             {
                 int dark = 1;
-
-                DwmSetWindowAttribute(
-                    this.Handle,
-                    DWMWA_USE_IMMERSIVE_DARK_MODE,
-                    ref dark,
-                    sizeof(int));
+                DwmSetWindowAttribute(this.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
             }
         }
-        
     }
 }

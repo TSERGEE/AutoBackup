@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using Newtonsoft.Json;
 
-namespace AutoBackup
+namespace AutoBackup.Models
 {
     public class BackupMeta
     {

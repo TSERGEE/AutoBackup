@@ -1,7 +1,9 @@
-﻿using System;
+﻿using AutoBackup.Models;
+using AutoBackup.Utils;
+using System;
 using System.Windows.Forms;
 
-namespace AutoBackup
+namespace AutoBackup.Services
 {
     public class TrayApplicationContext : ApplicationContext
     {
@@ -24,26 +26,26 @@ namespace AutoBackup
             trayIcon.ContextMenuStrip.Items.Add("Запустить резервное копирование сейчас", null, (s, e) => BackupManager.RunManualBackup());
             trayIcon.ContextMenuStrip.Items.Add("Выход", null, (s, e) => Exit());
 
-            // Запускаем главную логику
+            // Загрузка конфига (один раз)
             Config.Load();
-            // Добавляем в автозагрузку (только если включено в настройках)
+
+            // Добавление в автозагрузку
             if (Config.Current.AutoStart)
             {
-                Microsoft.Win32.RegistryKey rk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", true);
-                rk.SetValue("AutoBackup", System.Reflection.Assembly.GetExecutingAssembly().Location);
+                using (var rk = Microsoft.Win32.Registry.CurrentUser.OpenSubKey("Software\\Microsoft\\Windows\\CurrentVersion\\Run", true))
+                    rk.SetValue("AutoBackup", System.Reflection.Assembly.GetExecutingAssembly().Location);
             }
+
             Logger.Init();
             BackupManager.Initialize();
+
+            // НОВЫЙ планировщик на основе cron (вместо старого таймера)
+            SchedulerService.Initialize();
+
             TrayIconHelper.TrayIcon = trayIcon;
 
-            // Запускаем внутренний планировщик вместо Task Scheduler
-            StartInternalScheduler();
-
-            // Если первый запуск, показываем мастер
             if (Config.Current.FirstRun)
-            {
                 ShowWizard();
-            }
         }
         private void StartInternalScheduler()
         {
