@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Runtime.InteropServices;
 
 namespace AutoBackup.Controls
 {
@@ -44,12 +45,12 @@ namespace AutoBackup.Controls
                 BackColor = Color.Transparent
             };
 
-            backupBtn = CreateButton("▶ Backup", Color.FromArgb(0, 120, 215));
-            restoreBtn = CreateButton("↺ Restore", Color.FromArgb(45, 45, 50));
-            verifyBtn = CreateButton("✓ Verify", Color.FromArgb(45, 45, 50));
-            exportBtn = CreateButton("💾 Export log", Color.FromArgb(45, 45, 50));
-            clearBtn = CreateButton("🗑 Clear log", Color.Firebrick);
-            cancelBtn = CreateButton("⛔ Cancel", Color.Firebrick);
+            backupBtn = CreateButton("Запуск бэкапа", Color.FromArgb(0, 120, 215));
+            restoreBtn = CreateButton("Восстановить файлы", Color.FromArgb(45, 45, 50));
+            verifyBtn = CreateButton("Проверить файлы", Color.FromArgb(45, 45, 50));
+            exportBtn = CreateButton("Экспорт логов", Color.FromArgb(45, 45, 50));
+            clearBtn = CreateButton("Очистка логов", Color.Firebrick);
+            cancelBtn = CreateButton("Отмена", Color.Firebrick);
             cancelBtn.Visible = false;
             cancelBtn.Click += CancelCurrentOperation;
 
@@ -130,15 +131,22 @@ namespace AutoBackup.Controls
                 DefaultCellStyle = { BackColor = Color.FromArgb(35, 35, 40), ForeColor = Color.White, SelectionBackColor = Color.FromArgb(0, 120, 215) },
                 AlternatingRowsDefaultCellStyle = { BackColor = Color.FromArgb(35, 35, 40) }
             };
+            if (Environment.OSVersion.Version.Build >= 22000)
+            {
+                SetWindowTheme(logGrid.Handle, "DarkMode_ItemsView", null);
+            }
             logGrid.Columns.Add("Timestamp", "Дата/время");
             logGrid.Columns.Add("Operation", "Операция");
             logGrid.Columns.Add("Details", "Подробности");
             logGrid.Columns.Add("Status", "Статус");
 
-            logGrid.Columns[0].Width = 140;
-            logGrid.Columns[1].Width = 150;
-            logGrid.Columns[2].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            logGrid.Columns[3].Width = 100;
+            foreach (DataGridViewColumn col in logGrid.Columns)
+                col.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+
+            logGrid.Columns[0].FillWeight = 15; // Дата
+            logGrid.Columns[1].FillWeight = 15; // Операция
+            logGrid.Columns[2].FillWeight = 60; // Подробности
+            logGrid.Columns[3].FillWeight = 10; // Статус
 
             // ===== Сборка =====
             this.Controls.Add(logGrid);
@@ -353,6 +361,20 @@ namespace AutoBackup.Controls
             {
                 Logger.ClearLog();
                 LoadLog();
+            }
+        }
+        [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
+        private static extern int SetWindowTheme(
+            IntPtr hWnd,
+            string pszSubAppName,
+            string pszSubIdList);
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+
+            if (Environment.OSVersion.Version.Build >= 22000) // Windows 11
+            {
+                SetWindowTheme(logGrid.Handle, "DarkMode_ItemsView", null);
             }
         }
     }

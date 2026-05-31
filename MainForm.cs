@@ -47,7 +47,7 @@ namespace AutoBackup
 
         private void InitializeComponents()
         {
-            Text = "AutoBackup Professional";
+            Text = "Автоматическое резервное копирование файлов";
             Width = 1400;
             Height = 850;
             MinimumSize = new Size(1100, 700);
@@ -100,10 +100,10 @@ namespace AutoBackup
             pauseBtn.FillColor = Color.Goldenrod;
             pauseBtn.Click += TogglePause;
 
-            sideMenuPanel.Controls.Add(dashboardBtn);
-            sideMenuPanel.Controls.Add(settingsBtn);
-            sideMenuPanel.Controls.Add(aboutBtn);
             sideMenuPanel.Controls.Add(pauseBtn);
+            sideMenuPanel.Controls.Add(aboutBtn);
+            sideMenuPanel.Controls.Add(settingsBtn);
+            sideMenuPanel.Controls.Add(dashboardBtn);
 
             // ========== ЦЕНТРАЛЬНАЯ ОБЛАСТЬ ==========
             contentPanel = new Guna2Panel
@@ -265,7 +265,7 @@ namespace AutoBackup
 
         private void VerifyAllBackups()
         {
-            MessageBox.Show("Для проверки целостности используйте кнопку 'Verify' на главной панели.\n" +
+            MessageBox.Show("Для проверки целостности используйте кнопку 'Восстановить' на главной панели.\n" +
                 "Или выберите папку с бэкапом через меню Сервис → Открыть папку бэкапов.",
                 "Подсказка", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -277,11 +277,11 @@ namespace AutoBackup
             string sizeStr = FormatSize(totalSize);
             string lastTime = info.LastBackupTime?.ToString("yyyy-MM-dd HH:mm:ss") ?? "никогда";
             MessageBox.Show(
-                $"📊 Статистика резервного копирования\n\n" +
-                $"✅ Успешных бэкапов: {info.TotalFiles}\n" +
-                $"📅 Последний бэкап: {lastTime}\n" +
-                $"💾 Общий размер бэкапов: {sizeStr}\n" +
-                $"📁 Папка хранения: {Config.Current.DestinationFolder}",
+                $"Статистика резервного копирования\n\n" +
+                $"Успешных бэкапов: {info.TotalFiles}\n" +
+                $"Последний бэкап: {lastTime}\n" +
+                $"Общий размер бэкапов: {sizeStr}\n" +
+                $"Папка хранения: {Config.Current.DestinationFolder}",
                 "Статистика", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
 
