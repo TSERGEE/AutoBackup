@@ -9,7 +9,7 @@ namespace AutoBackup.Services
 {
     public static class SchedulerService
     {
-        private static System.Threading.Timer _timer;  // явное указание
+        private static System.Threading.Timer _timer;
         private static CrontabSchedule _currentSchedule;
         private static DateTime _nextRun;
 

@@ -16,7 +16,7 @@ namespace AutoBackup.Services
         {
             trayIcon = new NotifyIcon
             {
-                Icon = SystemIcons.Application,
+                Icon = LoadAppIcon() ?? SystemIcons.Application,
                 Text = "Авторезервное копирование",
                 Visible = true
             };
@@ -46,6 +46,24 @@ namespace AutoBackup.Services
 
             if (Config.Current.FirstRun)
                 ShowWizard();
+        }
+        private Icon LoadAppIcon()
+        {
+            string icoPath = Path.Combine(Application.StartupPath, "Icons", "appicon.ico");
+            if (File.Exists(icoPath))
+                return new Icon(icoPath);
+            string pngPath = Path.Combine(Application.StartupPath, "Icons", "appicon.png");
+            if (File.Exists(pngPath))
+            {
+                using (var img = Image.FromFile(pngPath))
+                using (var ms = new MemoryStream())
+                {
+                    img.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                    ms.Position = 0;
+                    return new Icon(ms);
+                }
+            }
+            return SystemIcons.Application;
         }
         private void StartInternalScheduler()
         {
@@ -88,9 +106,6 @@ namespace AutoBackup.Services
 
         private bool IsSystemIdle()
         {
-            // Реализация через GetLastInputInfo (требует P/Invoke)
-            // Для простоты пока возвращаем false, чтобы не мешать
-            // Можно добавить настоящую проверку позже
             return false;
         }
         private void ShowMainForm()

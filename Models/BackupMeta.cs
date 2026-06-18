@@ -8,8 +8,8 @@ namespace AutoBackup.Models
     public class BackupMeta
     {
         public DateTime BackupTime { get; set; }
-        public string BackupType { get; set; } // "Full" or "Diff"
-        public string FullBackupRef { get; set; } // для Diff – путь к полному, относительно которого сделан дифф
+        public string BackupType { get; set; } // "Full" or "Inc"
+        public string FullBackupRef { get; set; } // для Inc – путь к полному, относительно которого сделан инкремент
         public List<FileEntry> Files { get; set; } = new List<FileEntry>();
 
         public static void Save(string metaFilePath, BackupMeta meta)
@@ -26,9 +26,9 @@ namespace AutoBackup.Models
 
     public class FileEntry
     {
-        public string RelativePath { get; set; } // путь от корня источника (например, "Documents\\file.txt")
+        public string RelativePath { get; set; }
         public long Size { get; set; }
         public DateTime LastWriteTime { get; set; }
-        public string Hash { get; set; } // простой быстрый хеш (например, комбинация размера+даты, или SHA1 первых 1KB)
+        public string Hash { get; set; }
     }
 }

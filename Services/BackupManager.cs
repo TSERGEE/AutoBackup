@@ -16,25 +16,16 @@ namespace AutoBackup.Services
 {
     public static class BackupManager
     {
-        // ============================================================
-        // Поля и события
-        // ============================================================
         private static bool isRunning = false;
         private static DateTime pauseUntil = DateTime.MinValue;
         private static CancellationTokenSource _currentCts;
-
-        public static event Action<int, string> ProgressChanged; // процент, текущий файл
-        public static event Action<string> StatusChanged;        // текстовый статус
-        public static event Action<string, string> Notification; // заголовок, текст
-
-        // ============================================================
-        // Инициализация и управление паузой
-        // ============================================================
+        public static event Action<int, string> ProgressChanged;
+        public static event Action<string> StatusChanged;
+        public static event Action<string, string> Notification;
         public static void Initialize()
         {
             SystemEvents.PowerModeChanged += OnPowerModeChanged;
         }
-
         private static void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
         {
             if (Config.Current.PauseOnBattery && e.Mode == PowerModes.StatusChange)
@@ -53,31 +44,23 @@ namespace AutoBackup.Services
                 }
             }
         }
-
         public static bool IsRunning() => isRunning;
         public static bool IsPaused() => pauseUntil > DateTime.Now;
-
         public static void PauseFor(int minutes)
         {
             pauseUntil = DateTime.Now.AddMinutes(minutes);
             Logger.Log("User", $"Пауза на {minutes} минут.", "Info");
             StatusChanged?.Invoke($"Пауза до {pauseUntil:HH:mm}");
         }
-
         public static void Resume()
         {
             pauseUntil = DateTime.MinValue;
             StatusChanged?.Invoke("Готов");
         }
-
         public static void CancelCurrentOperation()
         {
             _currentCts?.Cancel();
         }
-
-        // ============================================================
-        // Основной метод запуска бэкапа
-        // ============================================================
         public static async Task RunBackup(bool isManual = false, CancellationToken externalToken = default)
         {
             if (isRunning)
@@ -111,17 +94,14 @@ namespace AutoBackup.Services
                 ProgressChanged?.Invoke(100, "Завершено");
             }
         }
-
         private static async Task RunBackupInternal(bool isManual, CancellationToken token)
         {
             // 1. Проверка прав на запись
             string destFolder = Config.Current.DestinationFolder;
             if (!TestWriteAccess(destFolder))
                 throw new UnauthorizedAccessException($"Нет прав на запись в {destFolder}");
-
             string backupsRoot = Path.Combine(destFolder, "Backups");
             Directory.CreateDirectory(backupsRoot);
-
             // 2. Оценка требуемого места
             long requiredSpace = await EstimateRequiredSpace(backupsRoot, token);
             long availableSpace = GetAvailableFreeSpace(destFolder);
@@ -133,16 +113,13 @@ namespace AutoBackup.Services
                 Notification?.Invoke("Ошибка", msg);
                 throw new Exception(msg);
             }
-
             // 3. Определяем тип бэкапа
             bool needFull = NeedFullBackup(backupsRoot);
-            string backupType = needFull ? "Full" : "Diff";
-
-            // 4. Временная папка (транзакционность)
+            string backupType = needFull ? "Full" : "Inc";
+            // 4. Временная папка
             string tempFolderName = $"{backupType}_temp_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
             string tempBackupPath = Path.Combine(backupsRoot, tempFolderName);
             Directory.CreateDirectory(tempBackupPath);
-
             try
             {
                 // 5. Загружаем эталонный метафайл (для инкремента)
@@ -157,7 +134,6 @@ namespace AutoBackup.Services
                     }
                     else needFull = true;
                 }
-
                 // 6. Создаём новый метафайл
                 BackupMeta newMeta;
                 if (needFull)
@@ -175,34 +151,31 @@ namespace AutoBackup.Services
                     string json = JsonConvert.SerializeObject(referenceMeta);
                     newMeta = JsonConvert.DeserializeObject<BackupMeta>(json);
                     newMeta.BackupTime = DateTime.Now;
-                    newMeta.BackupType = "Diff";
+                    newMeta.BackupType = "Inc";
                     newMeta.FullBackupRef = GetLastFullBackupPath(backupsRoot);
                 }
-
-                // 7. Копирование файлов (параллельно)
+                // 7. Копирование файлов
                 int errors = 0;
+                int warnings = 0;
                 var errorList = new List<string>();
-
+                var warningList = new List<string>();
                 // Собираем все файлы для копирования
                 var filesToCopy = new List<(string source, string dest, string relativePath)>();
                 foreach (string srcFolder in Config.Current.SourceFolders)
                 {
                     if (!Directory.Exists(srcFolder))
                     {
-                        errorList.Add($"Папка-источник не найдена: {srcFolder}");
+                        warningList.Add($"Папка-источник не найдена: {srcFolder}");
+                        warnings++;
                         continue;
                     }
-
                     string relativeRoot = Path.GetFileName(srcFolder);
                     if (string.IsNullOrEmpty(relativeRoot))
                     {
-                        // Для корня диска (например, D:\) создаём безопасное имя
                         relativeRoot = "Drive_" + srcFolder.TrimEnd('\\').TrimEnd(':');
                     }
-
                     string destSub = Path.Combine(tempBackupPath, relativeRoot);
                     Directory.CreateDirectory(destSub);
-
                     if (needFull)
                     {
                         CollectFilesToCopy(srcFolder, destSub, relativeRoot, filesToCopy, token);
@@ -212,7 +185,6 @@ namespace AutoBackup.Services
                         CollectChangedFiles(srcFolder, destSub, relativeRoot, referenceMeta, filesToCopy, token);
                     }
                 }
-
                 int totalFiles = filesToCopy.Count;
                 if (totalFiles == 0)
                 {
@@ -232,7 +204,7 @@ namespace AutoBackup.Services
                     {
                         Logger.Log("Backup", "Инкремент не создаётся, так как нет изменений.", "Info");
                         Notification?.Invoke("Резервное копирование", "Изменений не обнаружено.");
-                        return; // Выходим, не создаём бэкап
+                        return;
                     }
                     else
                     {
@@ -240,26 +212,21 @@ namespace AutoBackup.Services
                         return;
                     }
                 }
-
                 await ParallelCopyFilesAsync(filesToCopy, newMeta, (src, dest) =>
                 {
                     int processed = Interlocked.Increment(ref filesToCopyProcessed);
                     int percent = processed * 100 / totalFiles;
                     ProgressChanged?.Invoke(percent, Path.GetFileName(src));
                 }, errorList, token);
-
                 // 8. Сохраняем метафайл во временную папку
                 BackupMeta.Save(Path.Combine(tempBackupPath, "backup_meta.json"), newMeta);
-
-                // 9. Атомарное перемещение (транзакция)
+                // 9. Атомарное перемещение
                 string finalFolderName = $"{backupType}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}";
                 string finalBackupPath = Path.Combine(backupsRoot, finalFolderName);
                 Directory.Move(tempBackupPath, finalBackupPath);
-
                 // 10. Очистка старых бэкапов
                 CleanupOldBackups();
-
-                // 11. Автоматическая верификация (если включена)
+                // 11. Автоматическая верификация
                 if (Config.Current.VerifyAfterBackup)
                 {
                     StatusChanged?.Invoke("Верификация...");
@@ -267,21 +234,26 @@ namespace AutoBackup.Services
                     if (mismatches.Any())
                     {
                         string errorMsg = $"Верификация выявила {mismatches.Count} ошибок: " + string.Join("; ", mismatches.Take(5));
-                        Logger.Log("Verify", errorMsg, "Error");
-                        Notification?.Invoke("Ошибка верификации", errorMsg);
+                        Logger.Log("Verify", errorMsg, "Warning");
+                        Notification?.Invoke("Верификация завершена", $"Обнаружено {mismatches.Count} расхождений");
                     }
                     else
                     {
                         Logger.Log("Verify", "Верификация пройдена успешно", "Info");
                     }
                 }
-
                 // 12. Логируем результат
-                if (errorList.Count > 0)
+                if (errors > 0)
                 {
                     string errorMsg = string.Join("; ", errorList.Take(5));
-                    Logger.Log("Backup", $"Завершено с ошибками: {errorMsg}", "Warning");
+                    Logger.Log("Backup", $"Завершено с {errors} ошибками: {errorMsg}", "Error");
                     Notification?.Invoke("Ошибка резервного копирования", errorMsg);
+                }
+                else if (warnings > 0)
+                {
+                    string warnMsg = string.Join("; ", warningList.Take(5));
+                    Logger.Log("Backup", $"Завершено с {warnings} предупреждениями: {warnMsg}", "Warning");
+                    Notification?.Invoke("Резервное копирование завершено с предупреждениями", warnMsg);
                 }
                 else
                 {
@@ -300,12 +272,7 @@ namespace AutoBackup.Services
                 throw;
             }
         }
-
         private static int filesToCopyProcessed = 0;
-
-        // ============================================================
-        // Параллельное копирование
-        // ============================================================
         private static async Task ParallelCopyFilesAsync(
             List<(string source, string dest, string relativePath)> filesToCopy,
             BackupMeta newMeta,
@@ -344,10 +311,6 @@ namespace AutoBackup.Services
 
             await Task.WhenAll(tasks);
         }
-
-        // ============================================================
-        // Сбор файлов для копирования
-        // ============================================================
         private static void CollectFilesToCopy(string srcDir, string destDir, string relativePrefix,
             List<(string, string, string)> files, CancellationToken token)
         {
@@ -369,7 +332,6 @@ namespace AutoBackup.Services
                 CollectFilesToCopy(dir, destSub, newRel, files, token);
             }
         }
-
         private static void CollectChangedFiles(string srcDir, string destDir, string relativePrefix,
             BackupMeta referenceMeta, List<(string, string, string)> files, CancellationToken token)
         {
@@ -395,11 +357,8 @@ namespace AutoBackup.Services
                 CollectChangedFiles(dir, destSub, newRel, referenceMeta, files, token);
             }
         }
-
-        // ============================================================
-        // Верификация целостности
-        // ============================================================
-        public static async Task<List<string>> VerifyBackupIntegrityAsync(string backupFolderPath, CancellationToken token = default)
+        public static async Task<List<string>> VerifyBackupIntegrityAsync(string backupFolderPath,
+            CancellationToken token = default)
         {
             var mismatches = new List<string>();
             string metaFile = Path.Combine(backupFolderPath, "backup_meta.json");
@@ -410,7 +369,7 @@ namespace AutoBackup.Services
             if (meta == null)
                 throw new Exception("Не удалось загрузить метафайл");
 
-            // Для Diff-бэкапа – проверяем только файлы, которые хранятся в этой папке (изменённые)
+            // Для Inc-бэкапа – проверяем только файлы, которые хранятся в этой папке (изменённые)
             // Для Full – проверяем все файлы из этой папки
             var fileMap = new Dictionary<string, string>();
             CollectFilesFromBackup(backupFolderPath, "", fileMap);
@@ -418,8 +377,8 @@ namespace AutoBackup.Services
             // Исключаем сам метафайл из проверки
             fileMap.Remove("backup_meta.json");
 
-            // Дополнительно: если это Diff и нет файлов, то просто успех
-            if (meta.BackupType == "Diff" && fileMap.Count == 0)
+            // Дополнительно: если это Inc и нет файлов, то просто успех
+            if (meta.BackupType == "Inc" && fileMap.Count == 0)
             {
                 Logger.Log("Verify", "Инкрементальный бэкап не содержит файлов (пустая проверка). Верификация успешна.", "Info");
                 return mismatches;
@@ -455,8 +414,8 @@ namespace AutoBackup.Services
             }
             return mismatches;
         }
-
-        private static void CollectFilesFromBackup(string backupRoot, string currentRelative, Dictionary<string, string> fileMap, bool overwriteExisting = false)
+        private static void CollectFilesFromBackup(string backupRoot, string currentRelative,
+            Dictionary<string, string> fileMap, bool overwriteExisting = false)
         {
             foreach (string file in Directory.GetFiles(backupRoot))
             {
@@ -474,8 +433,7 @@ namespace AutoBackup.Services
                 CollectFilesFromBackup(dir, newRel, fileMap, overwriteExisting);
             }
         }
-
-        private static string FindOriginalFile(string relativePath)
+        public static string FindOriginalFile(string relativePath)
         {
             string[] parts = relativePath.Split(Path.DirectorySeparatorChar);
             if (parts.Length == 0) return null;
@@ -486,7 +444,6 @@ namespace AutoBackup.Services
             if (sourceFolder == null) return null;
             return Path.Combine(sourceFolder, relativeInside);
         }
-
         private static bool CompareFiles(string file1, string file2, bool useFullHash = false)
         {
             if (useFullHash && !Config.Current.UseFastHash)
@@ -504,7 +461,6 @@ namespace AutoBackup.Services
                 return hash1 == hash2;
             }
         }
-
         private static bool CompareFileHashFull(string file1, string file2)
         {
             using (var sha = System.Security.Cryptography.SHA256.Create())
@@ -516,10 +472,6 @@ namespace AutoBackup.Services
                 return StructuralComparisons.StructuralEqualityComparer.Equals(hash1, hash2);
             }
         }
-
-        // ============================================================
-        // Утилиты для работы с файлами
-        // ============================================================
         private static async Task<bool> CopyFileWithRetry(string source, string destination, CancellationToken token)
         {
             int retries = Config.Current.RetryCount;
@@ -553,8 +505,8 @@ namespace AutoBackup.Services
             }
             return false;
         }
-
-        private static async Task ThrottledCopyAsync(Stream source, Stream dest, long maxBytesPerSecond, CancellationToken token)
+        private static async Task ThrottledCopyAsync(Stream source, Stream dest, long maxBytesPerSecond,
+            CancellationToken token)
         {
             byte[] buffer = new byte[81920];
             long totalRead = 0;
@@ -574,7 +526,6 @@ namespace AutoBackup.Services
                 }
             }
         }
-
         private static FileEntry CreateFileEntry(string fullPath, string relativePath)
         {
             var fi = new FileInfo(fullPath);
@@ -586,13 +537,11 @@ namespace AutoBackup.Services
                 Hash = ComputeSimpleHash(fullPath)
             };
         }
-
         private static string ComputeSimpleHash(string filePath)
         {
             var fi = new FileInfo(filePath);
             return $"{fi.Length}_{fi.LastWriteTimeUtc.Ticks}";
         }
-
         private static bool IsFileChanged(string filePath, FileEntry refEntry)
         {
             if (refEntry == null) return true;
@@ -601,7 +550,6 @@ namespace AutoBackup.Services
             if (fi.LastWriteTimeUtc != refEntry.LastWriteTime) return true;
             return ComputeSimpleHash(filePath) != refEntry.Hash;
         }
-
         private static bool ShouldExclude(string fileName)
         {
             foreach (string mask in Config.Current.ExcludeMasks)
@@ -616,7 +564,6 @@ namespace AutoBackup.Services
             }
             return false;
         }
-
         private static bool TestWriteAccess(string folder)
         {
             try
@@ -629,17 +576,12 @@ namespace AutoBackup.Services
             }
             catch { return false; }
         }
-
-        // ============================================================
-        // Логика планирования и выбора типов бэкапов
-        // ============================================================
         private static bool NeedFullBackup(string backupsRoot)
         {
             var lastFull = GetLastFullBackup(backupsRoot);
             if (lastFull == null) return true;
             return (DateTime.Now - lastFull.Value.Meta.BackupTime).TotalDays >= Config.Current.FullBackupIntervalDays;
         }
-
         private static (string Path, BackupMeta Meta)? GetLastFullBackup(string backupsRoot)
         {
             var dirs = Directory.GetDirectories(backupsRoot, "Full_*")
@@ -650,7 +592,6 @@ namespace AutoBackup.Services
             if (dirs == null) return null;
             return (dirs.Path, dirs.Meta);
         }
-
         private static (string Path, BackupMeta Meta)? GetLastAnyBackup(string backupsRoot)
         {
             var dirs = Directory.GetDirectories(backupsRoot, "*_*")
@@ -661,16 +602,11 @@ namespace AutoBackup.Services
             if (dirs == null) return null;
             return (dirs.Path, dirs.Meta);
         }
-
         private static string GetLastFullBackupPath(string backupsRoot)
         {
             var full = GetLastFullBackup(backupsRoot);
             return full?.Path;
         }
-
-        // ============================================================
-        // Оценка места
-        // ============================================================
         private static async Task<long> EstimateRequiredSpace(string backupsRoot, CancellationToken token)
         {
             bool needFull = NeedFullBackup(backupsRoot);
@@ -700,7 +636,6 @@ namespace AutoBackup.Services
                 return changedSize;
             }
         }
-
         private static long GetDirectorySize(string path, CancellationToken token)
         {
             long size = 0;
@@ -712,8 +647,8 @@ namespace AutoBackup.Services
             }
             return size;
         }
-
-        private static long GetChangedFilesSize(string dir, string relativePrefix, BackupMeta refMeta, CancellationToken token)
+        private static long GetChangedFilesSize(string dir, string relativePrefix, BackupMeta refMeta,
+            CancellationToken token)
         {
             long size = 0;
             foreach (var file in Directory.GetFiles(dir))
@@ -735,13 +670,11 @@ namespace AutoBackup.Services
             }
             return size;
         }
-
         private static long GetAvailableFreeSpace(string path)
         {
             DriveInfo drive = new DriveInfo(Path.GetPathRoot(path));
             return drive.AvailableFreeSpace;
         }
-
         private static string FormatSize(long bytes)
         {
             string[] sizes = { "Б", "КБ", "МБ", "ГБ", "ТБ" };
@@ -750,10 +683,6 @@ namespace AutoBackup.Services
             while (len >= 1024 && order < sizes.Length - 1) { order++; len /= 1024; }
             return $"{len:0.##} {sizes[order]}";
         }
-
-        // ============================================================
-        // Очистка старых бэкапов
-        // ============================================================
         public static void CleanupOldBackups()
         {
             string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
@@ -771,7 +700,7 @@ namespace AutoBackup.Services
             var toDelete = fullBackups.Skip(keepCount);
             foreach (var full in toDelete)
             {
-                var incToDelete = Directory.GetDirectories(backupsRoot, "Diff_*")
+                var incToDelete = Directory.GetDirectories(backupsRoot, "Inc_*")
                     .Select(d => new { Path = d, Meta = BackupMeta.Load(Path.Combine(d, "backup_meta.json")) })
                     .Where(x => x.Meta != null && x.Meta.FullBackupRef == full.Path)
                     .ToList();
@@ -786,11 +715,8 @@ namespace AutoBackup.Services
                 catch (Exception ex) { Logger.LogError($"Ошибка удаления {full.Path}", ex); }
             }
         }
-
-        // ============================================================
-        // Восстановление из бэкапа (цепочка Full+Diff)
-        // ============================================================
-        public static async Task RestoreFromBackup(string backupFolderPath, string targetPath, bool overwrite, CancellationToken token = default)
+        public static async Task RestoreFromBackup(string backupFolderPath, string targetPath, bool overwrite,
+            CancellationToken token = default)
         {
             string metaFile = Path.Combine(backupFolderPath, "backup_meta.json");
             BackupMeta targetMeta = BackupMeta.Load(metaFile);
@@ -801,7 +727,7 @@ namespace AutoBackup.Services
             {
                 CollectFilesFromBackup(backupFolderPath, "", fileMap);
             }
-            else if (targetMeta.BackupType == "Diff")
+            else if (targetMeta.BackupType == "Inc")
             {
                 if (string.IsNullOrEmpty(targetMeta.FullBackupRef) || !Directory.Exists(targetMeta.FullBackupRef))
                     throw new Exception("Полный бэкап, на который ссылается инкремент, не найден.");
@@ -812,6 +738,7 @@ namespace AutoBackup.Services
 
             int restored = 0;
             int errors = 0;
+            int skipped = 0;
             int total = fileMap.Count;
             int percent = 0;
 
@@ -820,12 +747,32 @@ namespace AutoBackup.Services
                 token.ThrowIfCancellationRequested();
                 string relativePath = kvp.Key;
                 string sourceFile = kvp.Value;
-                string destFile = Path.Combine(targetPath, relativePath);
+
+                string destFile;
+                if (string.IsNullOrEmpty(targetPath))
+                {
+                    // Восстановление в оригинальные папки
+                    destFile = FindOriginalFile(relativePath);
+                    if (string.IsNullOrEmpty(destFile))
+                    {
+                        skipped++;
+                        Logger.Log("Restore", $"Не удалось определить оригинальный путь для {relativePath}", "Warning");
+                        continue;
+                    }
+                }
+                else
+                {
+                    destFile = Path.Combine(targetPath, relativePath);
+                }
 
                 try
                 {
                     Directory.CreateDirectory(Path.GetDirectoryName(destFile));
-                    if (File.Exists(destFile) && !overwrite) continue;
+                    if (File.Exists(destFile) && !overwrite)
+                    {
+                        skipped++;
+                        continue;
+                    }
                     File.Copy(sourceFile, destFile, overwrite);
                     restored++;
                 }
@@ -835,7 +782,7 @@ namespace AutoBackup.Services
                     Logger.LogError($"Восстановление {relativePath}", ex);
                 }
 
-                int newPercent = (restored + errors) * 100 / total;
+                int newPercent = (restored + errors + skipped) * 100 / total;
                 if (newPercent != percent)
                 {
                     percent = newPercent;
@@ -844,12 +791,10 @@ namespace AutoBackup.Services
                 await Task.Delay(1, token);
             }
 
-            Notification?.Invoke("Восстановление завершено", $"Восстановлено файлов: {restored}, ошибок: {errors}");
+            string resultMsg = $"Восстановлено: {restored}, пропущено: {skipped}, ошибок: {errors}";
+            Notification?.Invoke("Восстановление завершено", resultMsg);
+            Logger.Log("Restore", resultMsg, errors > 0 ? "Error" : "Info");
         }
-
-        // ============================================================
-        // Дополнительные публичные методы для UI
-        // ============================================================
         public static (DateTime? LastBackupTime, int TotalFiles, int TotalErrors) GetLastBackupInfo()
         {
             string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
@@ -859,7 +804,6 @@ namespace AutoBackup.Services
             var meta = last.Value.Meta;
             return (meta.BackupTime, meta.Files.Count, 0);
         }
-
         public static long GetTotalBackupSize()
         {
             string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
@@ -873,7 +817,6 @@ namespace AutoBackup.Services
             }
             return size;
         }
-
         public static void RunManualBackup() => Task.Run(() => RunBackup(true));
     }
 }

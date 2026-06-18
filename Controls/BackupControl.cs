@@ -131,10 +131,6 @@ namespace AutoBackup.Controls
                 DefaultCellStyle = { BackColor = Color.FromArgb(35, 35, 40), ForeColor = Color.White, SelectionBackColor = Color.FromArgb(0, 120, 215) },
                 AlternatingRowsDefaultCellStyle = { BackColor = Color.FromArgb(35, 35, 40) }
             };
-            if (Environment.OSVersion.Version.Build >= 22000)
-            {
-                SetWindowTheme(logGrid.Handle, "DarkMode_ItemsView", null);
-            }
             logGrid.Columns.Add("Timestamp", "Дата/время");
             logGrid.Columns.Add("Operation", "Операция");
             logGrid.Columns.Add("Details", "Подробности");
@@ -363,6 +359,12 @@ namespace AutoBackup.Controls
                 LoadLog();
             }
         }
+        [DllImport("dwmapi.dll")]
+        private static extern int DwmSetWindowAttribute(
+            IntPtr hwnd,
+            int dwAttribute,
+            ref int pvAttribute,
+            int cbAttribute);
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(
             IntPtr hWnd,
@@ -372,9 +374,17 @@ namespace AutoBackup.Controls
         {
             base.OnHandleCreated(e);
 
-            if (Environment.OSVersion.Version.Build >= 22000) // Windows 11
+            if (Environment.OSVersion.Version.Build >= 22000)
             {
                 SetWindowTheme(logGrid.Handle, "DarkMode_ItemsView", null);
+
+                int dark = 1;
+
+                DwmSetWindowAttribute(
+                    logGrid.Handle,
+                    20,
+                    ref dark,
+                    sizeof(int));
             }
         }
     }

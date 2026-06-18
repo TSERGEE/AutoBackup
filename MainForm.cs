@@ -19,18 +19,12 @@ namespace AutoBackup
         private StatusStrip statusStrip;
         private ToolStripStatusLabel statusLabel;
         private ToolStripStatusLabel nextRunLabel;
-        private ToolStripProgressBar toolProgressBar; // для статус-бара
-
+        private ToolStripProgressBar toolProgressBar;
         private Guna2Button dashboardBtn, settingsBtn, aboutBtn, pauseBtn;
         private UserControl activeControl;
-
-        // Токен отмены для текущей операции (бэкап или восстановление)
         private CancellationTokenSource currentCts;
-
-        // Цвета для кнопок меню
         private readonly Color activeColor = Color.FromArgb(0, 120, 215);
         private readonly Color normalColor = Color.Transparent;
-
         public MainForm()
         {
             InitializeComponents();
@@ -38,13 +32,10 @@ namespace AutoBackup
             SubscribeToBackupManagerEvents();
             ShowDashboard();
             UpdateNextRunInfo();
-
-            // Таймер обновления статуса расписания
             var timer = new System.Windows.Forms.Timer { Interval = 30000 };
             timer.Tick += (s, e) => UpdateNextRunInfo();
             timer.Start();
         }
-
         private void InitializeComponents()
         {
             Text = "Автоматическое резервное копирование файлов";
@@ -70,9 +61,9 @@ namespace AutoBackup
             fileMenu.DropDownItems.Add("Выход", null, (s, e) => Close());
 
             var toolsMenu = new ToolStripMenuItem("Сервис");
-            toolsMenu.DropDownItems.Add("Очистить старые бэкапы", null, (s, e) => CleanOldBackups());
-            toolsMenu.DropDownItems.Add("Проверить целостность бэкапов", null, (s, e) => VerifyAllBackups());
-            toolsMenu.DropDownItems.Add(new ToolStripSeparator());
+            //toolsMenu.DropDownItems.Add("Очистить старые бэкапы", null, (s, e) => CleanOldBackups());
+            //toolsMenu.DropDownItems.Add("Проверить целостность бэкапов", null, (s, e) => VerifyAllBackups());
+            //toolsMenu.DropDownItems.Add(new ToolStripSeparator());
             toolsMenu.DropDownItems.Add("Статистика", null, (s, e) => ShowStatistics());
             toolsMenu.DropDownItems.Add("Открыть папку бэкапов", null, (s, e) => OpenBackupFolder());
 
@@ -142,7 +133,6 @@ namespace AutoBackup
             mainMenu.Padding = new Padding(5, 2, 0, 2);
             statusStrip.Padding = new Padding(10, 0, 10, 0);
         }
-
         private Guna2Button CreateSideButton(string text, string icon, int top, bool isActive)
         {
             var btn = new Guna2Button
@@ -161,7 +151,6 @@ namespace AutoBackup
             btn.Click += (s, e) => ActivateButton(btn, text);
             return btn;
         }
-
         private void ActivateButton(Guna2Button clickedBtn, string text)
         {
             foreach (var btn in new[] { dashboardBtn, settingsBtn, aboutBtn, pauseBtn })
@@ -177,22 +166,18 @@ namespace AutoBackup
                     // pauseBtn не переключает вьюху
             }
         }
-
         private void ShowDashboard()
         {
             SetActiveControl(new BackupControl());
         }
-
         private void ShowSettings()
         {
             SetActiveControl(new SettingsControl());
         }
-
         private void ShowAbout()
         {
             SetActiveControl(new AboutControl());
         }
-
         private void SetActiveControl(UserControl control)
         {
             if (activeControl != null)
@@ -203,10 +188,6 @@ namespace AutoBackup
             control.BackColor = Color.FromArgb(24, 24, 27);
             contentPanel.Controls.Add(control);
         }
-
-        // =====================================================
-        // Обработчики меню и кнопок
-        // =====================================================
         private void TogglePause(object sender, EventArgs e)
         {
             if (BackupManager.IsPaused())
@@ -224,7 +205,6 @@ namespace AutoBackup
                 statusLabel.Text = "Статус: Пауза";
             }
         }
-
         private void ExportConfig()
         {
             using (SaveFileDialog sfd = new SaveFileDialog())
@@ -238,7 +218,6 @@ namespace AutoBackup
                 }
             }
         }
-
         private void ImportConfig()
         {
             using (OpenFileDialog ofd = new OpenFileDialog())
@@ -252,7 +231,6 @@ namespace AutoBackup
                 }
             }
         }
-
         private void CleanOldBackups()
         {
             if (MessageBox.Show("Удалить все бэкапы старше указанного в настройках срока?\n(Данные будут безвозвратно удалены)",
@@ -262,14 +240,12 @@ namespace AutoBackup
                 MessageBox.Show("Очистка завершена.", "Готово", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
-
         private void VerifyAllBackups()
         {
             MessageBox.Show("Для проверки целостности используйте кнопку 'Восстановить' на главной панели.\n" +
                 "Или выберите папку с бэкапом через меню Сервис → Открыть папку бэкапов.",
                 "Подсказка", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-
         private async void ShowStatistics()
         {
             var info = BackupManager.GetLastBackupInfo();
@@ -284,7 +260,6 @@ namespace AutoBackup
                 $"Папка хранения: {Config.Current.DestinationFolder}",
                 "Статистика", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
-
         private void OpenBackupFolder()
         {
             if (Directory.Exists(Config.Current.DestinationFolder))
@@ -292,7 +267,6 @@ namespace AutoBackup
             else
                 MessageBox.Show("Папка назначения не существует.", "Ошибка", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
-
         private string FormatSize(long bytes)
         {
             string[] sizes = { "Б", "КБ", "МБ", "ГБ", "ТБ" };
@@ -305,10 +279,6 @@ namespace AutoBackup
             }
             return $"{len:0.##} {sizes[order]}";
         }
-
-        // =====================================================
-        // Подписка на события BackupManager
-        // =====================================================
         private void SubscribeToBackupManagerEvents()
         {
             BackupManager.ProgressChanged += OnProgressChanged;
@@ -326,7 +296,6 @@ namespace AutoBackup
             BackupManager.StatusChanged -= OnStatusChanged;
             base.OnFormClosing(e);
         }
-
         protected override void Dispose(bool disposing)
         {
             if (disposing)
@@ -366,7 +335,6 @@ namespace AutoBackup
                 }
             }
         }
-
         private void OnStatusChanged(string status)
         {
             if (IsDisposed) return;
@@ -378,15 +346,10 @@ namespace AutoBackup
             if (IsDisposed || statusLabel == null) return;
             statusLabel.Text = $"Статус: {status}";
         }
-
         private void BackupManager_Notification(string title, string text)
         {
             TrayIconHelper.ShowBalloon(title, text);
         }
-
-        // =====================================================
-        // Обновление информации о расписании
-        // =====================================================
         private void UpdateNextRunInfo()
         {
             string schedule = Config.Current.BackupSchedule;
@@ -400,10 +363,6 @@ namespace AutoBackup
             };
             nextRunLabel.Text = $" Расписание: {text}";
         }
-
-        // =====================================================
-        // Тёмный заголовок окна
-        // =====================================================
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;

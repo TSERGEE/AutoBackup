@@ -15,9 +15,6 @@ namespace AutoBackup.Forms
 {
     public class RestoreForm : Form
     {
-        // =====================================================
-        // UI
-        // =====================================================
         private TreeView backupTree;
         private Guna2TextBox filterBox;
         private Guna2ComboBox backupTypeFilter;
@@ -34,23 +31,14 @@ namespace AutoBackup.Forms
         private Guna2Button cancelBtn;
         private Guna2Button closeBtn;
         private RichTextBox logBox;
-
         private CancellationTokenSource _cts;
-        private string _selectedBackupRoot; // корень выбранного бэкапа (папка с метафайлом)
-
-        // =====================================================
-        // CTOR
-        // =====================================================
+        private string _selectedBackupRoot;
         public RestoreForm()
         {
             InitializeComponents();
             EnableDarkTitleBar();
             LoadBackups();
         }
-
-        // =====================================================
-        // INIT
-        // =====================================================
         private void InitializeComponents()
         {
             Text = "Восстановление из резервной копии";
@@ -110,7 +98,7 @@ namespace AutoBackup.Forms
 
             backupTypeFilter = new Guna2ComboBox
             {
-                Items = { "Все", "Full", "Diff" },
+                Items = { "Все", "Full", "Inc" },
                 SelectedIndex = 0,
                 BorderRadius = 10,
                 FillColor = Color.FromArgb(35, 35, 40),
@@ -137,7 +125,7 @@ namespace AutoBackup.Forms
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.None,
                 Font = new Font("Segoe UI", 9F),
-                CheckBoxes = false, // не выбираем файлы по отдельности, восстанавливаем целиком бэкап
+                CheckBoxes = false,
                 HideSelection = false,
                 LineColor = Color.FromArgb(60, 60, 65),
                 ItemHeight = 24,
@@ -179,7 +167,8 @@ namespace AutoBackup.Forms
                 Checked = true,
                 ForeColor = Color.White,
                 BackColor = Color.Transparent,
-                Location = new Point(18, 50)
+                Location = new Point(18, 50),
+                AutoSize = true
             };
             overwriteCheckBox = new Guna2CheckBox
             {
@@ -187,7 +176,8 @@ namespace AutoBackup.Forms
                 Checked = true,
                 ForeColor = Color.White,
                 BackColor = Color.Transparent,
-                Location = new Point(18, 85)
+                Location = new Point(18, 85),
+                AutoSize = true
             };
             customRestorePath = new Guna2TextBox
             {
@@ -320,7 +310,6 @@ namespace AutoBackup.Forms
             bottomPanel.Controls.Add(cancelBtn);
             bottomPanel.Controls.Add(closeBtn);
         }
-
         private Guna2Panel CreateCard()
         {
             return new Guna2Panel
@@ -330,7 +319,6 @@ namespace AutoBackup.Forms
                 FillColor = Color.FromArgb(30, 30, 35)
             };
         }
-
         private Label CreateTitle(string text)
         {
             return new Label
@@ -342,7 +330,6 @@ namespace AutoBackup.Forms
                 Location = new Point(18, 18)
             };
         }
-
         private Guna2Button CreatePrimaryButton(string text)
         {
             return new Guna2Button
@@ -354,7 +341,6 @@ namespace AutoBackup.Forms
                 Font = new Font("Segoe UI", 9F, FontStyle.Bold)
             };
         }
-
         private Guna2Button CreateSecondaryButton(string text)
         {
             return new Guna2Button
@@ -366,10 +352,6 @@ namespace AutoBackup.Forms
                 Font = new Font("Segoe UI", 9F)
             };
         }
-
-        // =====================================================
-        // LOAD BACKUPS
-        // =====================================================
         private void LoadBackups()
         {
             string backupsRoot = Path.Combine(Config.Current.DestinationFolder, "Backups");
@@ -393,7 +375,6 @@ namespace AutoBackup.Forms
                 backupTree.Nodes.Add(node);
             }
         }
-
         private void BackupTree_BeforeExpand(object sender, TreeViewCancelEventArgs e)
         {
             if (e.Node.Nodes.Count == 1 && e.Node.Nodes[0].Text == "loading")
@@ -416,10 +397,8 @@ namespace AutoBackup.Forms
                 }
             }
         }
-
         private void BackupTree_AfterSelect(object sender, TreeViewEventArgs e)
         {
-            // Определяем корневую папку бэкапа (ту, что содержит backup_meta.json)
             TreeNode node = e.Node;
             while (node.Parent != null)
                 node = node.Parent;
@@ -439,7 +418,6 @@ namespace AutoBackup.Forms
             infoLabel.Text = info;
             selectedCountLabel.Text = $"Выбрана резервная копия: {Path.GetFileName(backupRoot)}";
         }
-
         private void ApplyFilter()
         {
             string filter = filterBox.Text.Trim().ToLower();
@@ -450,10 +428,6 @@ namespace AutoBackup.Forms
                     : Color.Transparent;
             }
         }
-
-        // =====================================================
-        // RESTORE
-        // =====================================================
         private async void RestoreSelected(object sender, EventArgs e)
         {
             if (string.IsNullOrEmpty(_selectedBackupRoot))
@@ -465,8 +439,7 @@ namespace AutoBackup.Forms
             string targetPath = null;
             if (restoreToOriginalCheckBox.Checked)
             {
-                // оригинальные папки определяются автоматически внутри BackupManager.RestoreFromBackup
-                targetPath = null; // специальный маркер для восстановления в оригинал
+                targetPath = null;
             }
             else
             {
@@ -488,7 +461,6 @@ namespace AutoBackup.Forms
                 statusLabel.Text = "Восстановление...";
                 logBox.Clear();
 
-                // Подписываемся на прогресс
                 BackupManager.ProgressChanged += OnRestoreProgress;
                 await BackupManager.RestoreFromBackup(_selectedBackupRoot, targetPath, overwriteCheckBox.Checked, _cts.Token);
             }
@@ -515,14 +487,12 @@ namespace AutoBackup.Forms
                 currentFileLabel.Text = "";
             }
         }
-
         private void CancelRestore(object sender, EventArgs e)
         {
             _cts?.Cancel();
             cancelBtn.Enabled = false;
             cancelBtn.Text = "Отмена...";
         }
-
         private void OnRestoreProgress(int percent, string fileName)
         {
             if (InvokeRequired)
@@ -535,7 +505,6 @@ namespace AutoBackup.Forms
             if (percent == 100)
                 currentFileLabel.Text = "";
         }
-
         private void Log(string text)
         {
             if (InvokeRequired)
@@ -545,7 +514,6 @@ namespace AutoBackup.Forms
             }
             logBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {text}{Environment.NewLine}");
         }
-
         private void BrowseCustomPathBtn_Click(object sender, EventArgs e)
         {
             using (var dialog = new FolderBrowserDialog())
@@ -554,14 +522,9 @@ namespace AutoBackup.Forms
                     customRestorePath.Text = dialog.SelectedPath;
             }
         }
-
-        // =====================================================
-        // DARK THEME SUPPORT
-        // =====================================================
         [DllImport("dwmapi.dll")]
         private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
-
         private void EnableDarkTitleBar()
         {
             if (Environment.OSVersion.Version.Major >= 10)
@@ -570,14 +533,12 @@ namespace AutoBackup.Forms
                 DwmSetWindowAttribute(this.Handle, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
             }
         }
-
         [DllImport("uxtheme.dll", CharSet = CharSet.Unicode)]
         private static extern int SetWindowTheme(IntPtr hWnd, string pszSubAppName, string pszSubIdList);
         [DllImport("uxtheme.dll", EntryPoint = "#135")]
         private static extern int SetPreferredAppMode(int appMode);
         [DllImport("uxtheme.dll", EntryPoint = "#133")]
         private static extern int AllowDarkModeForWindow(IntPtr hWnd, bool allow);
-
         private void EnableDarkScrollBar(Control control)
         {
             if (Environment.OSVersion.Version.Major >= 10)
